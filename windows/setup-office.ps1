@@ -1,9 +1,10 @@
-param([string]$AppPath)
+param([string]$AppPath,[switch]$ResumeAfterAccounts)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'office-common.ps1')
 if (-not (Test-BlackAdministrator)) {
     $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"'))
     if ($AppPath) { $arguments += @('-AppPath', ('"' + $AppPath + '"')) }
+    if ($ResumeAfterAccounts) { $arguments += '-ResumeAfterAccounts' }
     $child = Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments -Wait -PassThru
     exit $child.ExitCode
 }
@@ -94,6 +95,7 @@ try {
     if (-not $safetyBackup.folder -or -not (Test-Path -LiteralPath (Join-Path $safetyBackup.folder 'black.black')) -or -not (Test-Path -LiteralPath (Join-Path $safetyBackup.folder 'manifest.json'))) { throw '안전 백업 결과 파일을 확인할 수 없어 중단했습니다.' }
     Write-Host ('안전 백업 완료: ' + $safetyBackup.folder)
 
+    if (-not $ResumeAfterAccounts) {
     Write-Host '알려주신 직원 공통 비밀번호를 입력하세요. 화면과 로그에는 표시되지 않습니다.'
     $secure = Read-Host '직원 공통 비밀번호' -AsSecureString
     $pointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
@@ -109,20 +111,32 @@ try {
         Remove-Variable plain,secure -ErrorAction SilentlyContinue
     }
 
+    } else { Write-Host '이미 완료된 직원 계정 설정은 건너뜁니다. 비밀번호를 다시 변경하지 않습니다.' }
+
     $pfxPath = Join-Path $private 'tls.pfx'
     $tlsPath = Join-Path $private 'tls.json'
-    if ((Test-Path $pfxPath) -or (Test-Path $tlsPath)) {
-        if (-not ((Test-Path $pfxPath) -and (Test-Path $tlsPath))) { throw '기존 HTTPS 파일이 일부만 있습니다. 덮어쓰지 않았습니다.' }
-        $tls = Get-Content -LiteralPath $tlsPath -Raw | ConvertFrom-Json
-        $certificate = New-Object -TypeName Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList @($pfxPath, $tls.password)
-        if ($certificate.GetNameInfo([Security.Cryptography.X509Certificates.X509NameType]::DnsName,$false) -ine 'gb-8234' -or $certificate.NotAfter -lt (Get-Date).AddDays(30)) { throw '기존 인증서의 주소/만료일을 확인해야 합니다. 기존 인증서를 임의로 교체하지 않았습니다.' }
-    } else {
+    $certificate = $null
+    if ((Test-Path $pfxPath) -and (Test-Path $tlsPath)) {
+        try {
+            $tls = Get-Content -LiteralPath $tlsPath -Raw | ConvertFrom-Json
+            $candidate = New-Object -TypeName Security.Cryptography.X509Certificates.X509Certificate2 -ArgumentList @($pfxPath, $tls.password)
+            if (Test-BlackServerCertificate $candidate) { $certificate = $candidate; Write-Host '기존 인증서의 전체 DNS 이름과 유효기간을 확인했습니다.' }
+        } catch { Write-Host '기존 인증서 파일을 보존한 뒤 사내 접속용 인증서를 새로 준비합니다.' }
+    }
+    if (-not $certificate) {
+        $tlsHistory = Join-Path $private ('tls-history\' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N'))
+        New-Item -ItemType Directory -Force $tlsHistory | Out-Null
+        foreach ($name in @('tls.pfx','tls.json','BLACK-server.cer')) {
+            $oldFile = Join-Path $private $name
+            if (Test-Path -LiteralPath $oldFile) { Copy-Item -LiteralPath $oldFile -Destination $tlsHistory -ErrorAction Stop }
+        }
+        Write-Host ('사내 접속용 인증서 준비. 이전 파일 보관: ' + $tlsHistory)
         $random = New-Object byte[] 32
         $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($random); $rng.Dispose()
         $pfxPassword = [Convert]::ToBase64String($random)
         $pfxSecure = ConvertTo-SecureString $pfxPassword -AsPlainText -Force
         $certificate = New-SelfSignedCertificate -DnsName 'gb-8234','localhost',$env:COMPUTERNAME -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(1) -KeyAlgorithm RSA -KeyLength 3072 -HashAlgorithm SHA256 -KeyExportPolicy Exportable -Type SSLServerAuthentication
-        Export-PfxCertificate -Cert $certificate -FilePath $pfxPath -Password $pfxSecure | Out-Null
+        Export-PfxCertificate -Cert $certificate -FilePath $pfxPath -Password $pfxSecure -Force | Out-Null
         @{password=$pfxPassword} | ConvertTo-Json | Set-Content -LiteralPath $tlsPath -Encoding UTF8
         Remove-Variable pfxPassword,pfxSecure,random -ErrorAction SilentlyContinue
     }

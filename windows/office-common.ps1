@@ -66,3 +66,38 @@ function Get-BlackServerIPv4 {
     }
     throw '활성 사내망의 IPv4 주소를 찾지 못했습니다. 사내망 연결을 확인해 주세요.'
 }
+
+function Read-BlackDerLength([byte[]]$Bytes, [ref]$Position) {
+    if ($Position.Value -ge $Bytes.Length) { throw 'Invalid certificate extension' }
+    [int]$length = $Bytes[$Position.Value]; $Position.Value++
+    if ($length -band 128) {
+        $count = $length -band 127
+        if ($count -lt 1 -or $count -gt 3 -or $Position.Value + $count -gt $Bytes.Length) { throw 'Invalid certificate extension' }
+        $length = 0
+        for ($i=0; $i -lt $count; $i++) { $length = ($length -shl 8) -bor $Bytes[$Position.Value]; $Position.Value++ }
+    }
+    return $length
+}
+
+function Get-BlackCertificateDnsNames($Certificate) {
+    $extension = $Certificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.17' } | Select-Object -First 1
+    if (-not $extension) { return }
+    [byte[]]$bytes = $extension.RawData
+    if ($bytes.Length -lt 2 -or $bytes[0] -ne 48) { throw 'Invalid certificate extension' }
+    $position = 1
+    $length = Read-BlackDerLength $bytes ([ref]$position)
+    $end = $position + $length
+    if ($end -ne $bytes.Length) { throw 'Invalid certificate extension' }
+    while ($position -lt $end) {
+        $tag = $bytes[$position]; $position++
+        $length = Read-BlackDerLength $bytes ([ref]$position)
+        if ($position + $length -gt $end) { throw 'Invalid certificate extension' }
+        if ($tag -eq 130) { [Text.Encoding]::ASCII.GetString($bytes,$position,$length) }
+        $position += $length
+    }
+}
+
+function Test-BlackServerCertificate($Certificate) {
+    if (-not $Certificate.HasPrivateKey -or $Certificate.NotBefore -gt (Get-Date) -or $Certificate.NotAfter -lt (Get-Date).AddDays(30)) { return $false }
+    try { return (@(Get-BlackCertificateDnsNames $Certificate) -icontains 'gb-8234') } catch { return $false }
+}

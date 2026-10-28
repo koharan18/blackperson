@@ -1,8 +1,10 @@
-﻿param([Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{40}$')][string]$Revision)
+﻿param([Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{40}$')][string]$Revision,[switch]$ResumeAfterAccounts)
 $ErrorActionPreference = 'Stop'
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
-    $child = Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"' + $PSCommandPath + '"'),'-Revision',$Revision) -Wait -PassThru
+    $arguments = @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"' + $PSCommandPath + '"'),'-Revision',$Revision)
+    if ($ResumeAfterAccounts) { $arguments += '-ResumeAfterAccounts' }
+    $child = Start-Process powershell.exe -Verb RunAs -ArgumentList $arguments -Wait -PassThru
     exit $child.ExitCode
 }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -13,8 +15,8 @@ $setupRoot = $manifestFile.Directory.FullName
 $manifest = Get-Content -LiteralPath $manifestFile.FullName -Raw | ConvertFrom-Json
 if ($manifest.format -ne 'BLACK-OFFICE-UPDATE-1') { throw '기존 설치기 형식이 다릅니다.' }
 $hashes = @{
-    'windows/office-common.ps1' = 'b965d02c19e0b4b434567d7fe0a2da7744fa903f0eb3a96a2a3be9548176536e'
-    'windows/setup-office.ps1' = '608442cb2e0a5916b67e95c40b159677a310fc3775238b050f5c96f0c6362942'
+    'windows/office-common.ps1' = 'd99eb66a3dd3e05bf9457e86d76e89f0d1fb6f98a64c0c9732c31afcc9af9461'
+    'windows/setup-office.ps1' = '4a7827414e4794cfdf91817062e0528808127b9c19b4539e0cd35cd52a76216e'
     'windows/office-run.ps1' = '9af2f44e85296331558573287c3e589e7e60c800d785d4bc2ae298355759fcf9'
     'windows/office-backup.ps1' = '9a870aeb78f84579497d3a64671aae9d0fbcdfc7de5c16b3aa39b7a5d16556a6'
     'server/index.mjs' = '834ccc28cee10b472742db460d224f082eed8bd9127ad6987be165de439f6b2c'
@@ -97,4 +99,4 @@ foreach ($name in $content.Keys) {
 $manifest.sourceCommit = $Revision
 $manifest | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $manifestFile.FullName -Encoding UTF8
 Write-Host '기존 설치 파일을 검증해 갱신했습니다. 새 폴더를 만들 필요가 없습니다.'
-& (Join-Path $setupRoot 'SETUP-SERVER.ps1') -AppPath (Join-Path $downloadRoot 'BLACK-recovery\BLACK')
+& (Join-Path $setupRoot 'SETUP-SERVER.ps1') -AppPath (Join-Path $downloadRoot 'BLACK-recovery\BLACK') -ResumeAfterAccounts:$ResumeAfterAccounts
