@@ -1,0 +1,15 @@
+Completed: True
+Exit: 1
+STDOUT:
+Elevated orchestrator confirmed.
+
+STDERR:
+Error: Command failed: D:\a\blackperson\blackperson\node_modules\@embedded-postgres\windows-x64\native\bin\pg_ctl.exe start -D C:\Users\RUNNER~1\AppData\Local\Temp\black-pg-control-BO3dME\data\postgres -p D:\a\blackperson\blackperson\node_modules\@embedded-postgres\windows-x64\native\bin\initdb.exe -o -U black_local --auth=scram-sha-256 --pwfile="C:\Users\RUNNER~1\AppData\Local\Temp\black-pg-control-BO3dME\init-password.txt" --encoding=UTF8 --locale=C -l C:\Users\RUNNER~1\AppData\Local\Temp\black-pg-control-BO3dME\init.log -W
+pg_ctl: directory "C:/Users/RUNNER~1/AppData/Local/Temp/black-pg-control-BO3dME/data/postgres" does not exist
+
+    at genericNodeError (node:internal/errors:986:15)
+    at wrappedFn (node:internal/errors:540:14)
+    at ChildProcess.exithandler (node:child_process:417:12)
+    at ChildProcess.emit (node:events:514:28)
+    at maybeClose (node:internal/child_process:1172:16)
+    at ChildProcess._handle.onexit (node:internal/child_process:335:5)
