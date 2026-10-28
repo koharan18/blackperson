@@ -149,7 +149,7 @@ try {
                 $expected='\\.\pipe\BLACK-'+$digest.Substring(0,20)
                 $process=Get-CimInstance Win32_Process -Filter ('ProcessId='+[int]$control.pid)
                 $listener=@(Get-NetTCPConnection -State Listen -LocalPort 443 -OwningProcess ([int]$control.pid) -ErrorAction SilentlyContinue)
-                if($control.endpoint -ne $expected -or $process.CommandLine -notlike ('*'+(Join-Path $Destination 'server\index.mjs')+'*') -or -not $listener.Count){continue}
+                if($control.endpoint -ne $expected -or $process.CommandLine -notlike ('*'+(Join-Path $Destination 'server\index.mjs')+'*') -or -not $listener.Count){Start-Sleep -Seconds 1;continue}
                 $response=Invoke-WebRequest 'https://gb-8234/api/session' -UseBasicParsing -TimeoutSec 3;$session=$response.Content|ConvertFrom-Json
                 if($response.StatusCode -eq 200 -and $session.csrfToken){$ready=$true;break}
             }catch{}
