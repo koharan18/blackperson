@@ -8,8 +8,8 @@ $setupRoot = $manifestFile.Directory.FullName
 $manifest = Get-Content -LiteralPath $manifestFile.FullName -Raw | ConvertFrom-Json
 if ($manifest.format -ne 'BLACK-OFFICE-UPDATE-1') { throw '기존 설치기 형식이 다릅니다.' }
 $hashes = @{
-    'windows/office-common.ps1' = '213f3b82e3ca678bc3e0e551ce81153758a288467835c4f2889e8cc18aafe8b3'
-    'windows/office-worker.ps1' = '5eb675e93467010f38be25550e3939b4513353cc1eee663593ef66e6052c7e87'
+    'windows/office-common.ps1' = 'd9ae1b0f212f1a8eea51a7a18812159de3a99a960971c8149b65988a65091f21'
+    'windows/office-worker.ps1' = 'cd81614b72318b2b106e7032909fdda51431cd2d339525facd225af0d48a841e'
     'windows/setup-office.ps1' = '0c32c74c17610d5521459a72a44e9218bbd4931fab4dd576e6833e535ab027ae'
     'windows/office-run.ps1' = '854716a40d81ee2c7198072739e5b10ebe11b78ae9131c91c06926adaeda69b0'
     'windows/office-backup.ps1' = '0597550838a736f09320e557c70ca8ec3d6d4650c8d1938a07ee441ed84d5cea'

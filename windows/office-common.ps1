@@ -81,16 +81,26 @@ function Invoke-BlackLimitedJob([string]$AppPath, [hashtable]$Request) {
         $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $worker + '" -AppPath "' + $AppPath + '" -PipeName "' + $pipeName + '"') -WorkingDirectory $AppPath
         $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+        Write-Host '일반 사용자 작업 시작 요청 중...'
         $pending = $pipe.BeginWaitForConnection($null,$null)
         Start-ScheduledTask -TaskName $taskName
         if (-not $pending.AsyncWaitHandle.WaitOne(45000)) { throw '일반 사용자 작업을 시작하지 못했습니다. 작업 스케줄러의 BLACK Setup Worker 결과 또는 회사 배치 로그온 정책을 확인해야 합니다.' }
         $pipe.EndWaitForConnection($pending)
+        Write-Host '일반 사용자 작업 연결 완료. 요청 전달 중...'
         $reader = New-Object IO.StreamReader($pipe)
         $writer = New-Object IO.StreamWriter($pipe)
         $writer.AutoFlush = $true
         $writer.WriteLine(($Request | ConvertTo-Json -Compress))
         $response = $reader.ReadLineAsync()
-        if (-not $response.Wait(840000)) { throw '일반 사용자 DB 작업의 응답 시간이 초과되었습니다. DB 파일을 삭제하지 말고 작업 상태를 확인하세요.' }
+        $trace = Join-Path $AppPath ('private\worker-' + $pipeName + '.log')
+        $lastStage = ''
+        for ($i=0; $i -lt 420 -and -not $response.Wait(2000); $i++) {
+            if (Test-Path -LiteralPath $trace) {
+                $stage = Get-Content -LiteralPath $trace -Tail 1
+                if ($stage -ne $lastStage) { Write-Host ('작업 진행: ' + $stage); $lastStage = $stage }
+            }
+        }
+        if (-not $response.IsCompleted) { throw '일반 사용자 DB 작업의 응답 시간이 초과되었습니다. private의 worker 로그로 마지막 단계를 확인하세요. DB 파일은 삭제하지 마세요.' }
         if (-not $response.Result) { throw '일반 사용자 DB 작업이 결과 없이 종료되었습니다.' }
         $result = $response.Result | ConvertFrom-Json
         if ($result.exitCode -ne 0) { throw ('일반 사용자 DB 작업 실패: ' + $result.error) }
