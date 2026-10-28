@@ -62,8 +62,10 @@ export function applyDesignUpdate(bundleDirectory, targetDirectory) {
   return {updated: changed.length, target, backup};
 }
 
-function findApp() {
-  const downloads = join(process.env.USERPROFILE || homedir(), 'Downloads');
+export function findApp(profile = process.env.USERPROFILE || homedir()) {
+  const desktop = join(profile, 'Desktop', '코덱스', 'BLACK');
+  try {if(isApp(desktop) && resolve(JSON.parse(readFileSync(join(desktop,'private','app-move.json'),'utf8').replace(/^\uFEFF/, '')).destination) === resolve(desktop)) return desktop;} catch {}
+  const downloads = join(profile, 'Downloads');
   const known = join(downloads, 'BLACK-recovery', 'BLACK');
   if (isApp(known)) return known;
   const found = [];

@@ -1,7 +1,8 @@
 ﻿param(
     [string]$Source=(Join-Path $env:USERPROFILE 'Downloads\BLACK-recovery\BLACK'),
     [string]$Destination=(Join-Path $env:USERPROFILE 'Desktop\코덱스\BLACK'),
-    [string]$HelperPath=(Join-Path $PSScriptRoot 'BLACK-migration-snapshot.mjs')
+    [string]$HelperPath=(Join-Path $PSScriptRoot 'BLACK-migration-snapshot.mjs'),
+    [string]$RuntimePatch=(Join-Path $PSScriptRoot 'BLACK-move-runtime')
 )
 $ErrorActionPreference='Stop'
 . (Join-Path $Source 'windows\office-common.ps1')
@@ -21,6 +22,12 @@ foreach($path in @($Source,$Destination)) {
     }
 }
 if ((Get-FileHash -LiteralPath $HelperPath -Algorithm SHA256).Hash -ine 'e0246cd35f2ed0a7e6e06cfddf402ed7773937aeddf4c788bfc25c55dfbc55f5') { throw '이전 검증 프로그램의 파일 검증에 실패했습니다.' }
+$runtimeFiles=@{
+    'runtime.mjs'='f1a79b495fbe802d77b397527e11a91f1ba3788aee967d753cae180a5eea1162'
+    'pg-control.mjs'='67fd1287b371f662aa6a4d33eed1254c69839963926427329abb85b3a3c0db41'
+    'windows-paths.mjs'='f95af80b15d316cc29d40a5d2400bf2f724605134f78a264be04199167968d74'
+}
+foreach($name in $runtimeFiles.Keys){if((Get-FileHash -LiteralPath (Join-Path $RuntimePatch $name) -Algorithm SHA256).Hash -ine $runtimeFiles[$name]){throw '한글 경로 지원 코드의 검증에 실패했습니다.'}}
 $package=Get-Content (Join-Path $Source 'package.json') -Raw | ConvertFrom-Json
 if($package.name -ne 'black-recovery' -or -not(Test-Path (Join-Path $Source 'data\postgres\PG_VERSION'))) { throw '실제 사용 중인 BLACK 앱을 찾지 못했습니다.' }
 $serverTask=Get-ScheduledTask -TaskName 'BLACK Office Server'
@@ -38,10 +45,13 @@ Get-ChildItem (Join-Path $Source 'data\postgres') -Filter '*.conf' -File | ForEa
         if($line -notmatch '^\s*#' -and ($line.Contains($Source) -or $line.Contains($Source.Replace('\','/')))) { throw 'PostgreSQL 설정에 원본 절대 경로가 있습니다.' }
     }
 }
+$aliasProbe=& $office.node (Join-Path $RuntimePatch 'windows-paths.mjs') --probe (Split-Path $Destination -Parent)
+if($LASTEXITCODE -ne 0){throw '바탕화면 상위 폴더의 영문 경로 별칭을 확인하지 못했습니다. 기존 앱은 중단하거나 이동하지 않았습니다.'}
 $serverEnabled=$serverTask.Settings.Enabled;$backupEnabled=$backupTask.Settings.Enabled
 $wasRunning=$serverTask.State -eq 'Running'
 $serverAction=$serverTask.Actions;$backupAction=$backupTask.Actions
-$destinationStarted=$false;$tasksChanged=$false;$maintenance=$false;$sourceStopRequested=$false
+$serverXml=Export-ScheduledTask -TaskName 'BLACK Office Server';$backupXml=Export-ScheduledTask -TaskName 'BLACK Office Backup'
+$destinationStarted=$false;$tasksChanged=$false;$maintenance=$false;$sourceStopRequested=$false;$sourceRetired=$false
 function Assert-BlackDatabaseStopped {
     if(@(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {$_.LocalPort -in @(443,8234,15434)}).Count -or (Test-Path (Join-Path $Source 'data\postgres\postmaster.pid')) -or (Test-Path (Join-Path $Destination 'data\postgres\postmaster.pid'))) { throw '서버/DB가 아직 실행 중입니다. 실행 중인 DB 파일은 복사하지 않습니다.' }
 }
@@ -68,8 +78,8 @@ try {
     $raw=& $office.node $HelperPath $Source
     if($LASTEXITCODE -ne 0){throw '원본 명단 검증에 실패했습니다.'};$before=$raw|ConvertFrom-Json
     Assert-BlackDatabaseStopped
-    Export-ScheduledTask -TaskName 'BLACK Office Server' | Set-Content (Join-Path $backup.folder 'server-task-before.xml') -Encoding UTF8
-    Export-ScheduledTask -TaskName 'BLACK Office Backup' | Set-Content (Join-Path $backup.folder 'backup-task-before.xml') -Encoding UTF8
+    $serverXml | Set-Content (Join-Path $backup.folder 'server-task-before.xml') -Encoding UTF8
+    $backupXml | Set-Content (Join-Path $backup.folder 'backup-task-before.xml') -Encoding UTF8
     $files=New-Object Collections.Generic.List[object]
     $directories=New-Object 'Collections.Generic.Stack[string]';$directories.Push($Source)
     while($directories.Count) {
@@ -79,6 +89,8 @@ try {
             if($entry.PSIsContainer){$directories.Push($entry.FullName)}else{$files.Add($entry)}
         }
     }
+    $needed=($files | Measure-Object -Property Length -Sum).Sum+64MB
+    if(([IO.DriveInfo]::new([IO.Path]::GetPathRoot($Destination))).AvailableFreeSpace -lt $needed){throw '대상 드라이브의 여유 공간이 부족합니다. 원본은 보존했습니다.'}
     New-Item -ItemType Directory -Path $Destination | Out-Null
     Set-BlackPrivateAcl $Destination
     foreach($task in @($serverTask,$backupTask)) {
@@ -92,10 +104,21 @@ try {
     if($LASTEXITCODE -ge 8){throw '폴더 복사에 실패했습니다. 다운로드의 원본은 보존돼 있습니다.'}
     Assert-BlackDatabaseStopped
     Write-Host ('복사 파일 검증 중 ('+$files.Count+'개)...')
+    $checked=0
     foreach($file in $files) {
+        $checked++
+        if($checked % 250 -eq 0){Write-Progress -Activity '앱 전체 파일 검증' -Status ($checked.ToString()+'/'+$files.Count) -PercentComplete ([int](100*$checked/$files.Count))}
         $relative=$file.FullName.Substring($Source.Length).TrimStart('\')
         $copy=Join-Path $Destination $relative
         if(-not(Test-Path -LiteralPath $copy) -or (Get-Item -LiteralPath $copy).Length -ne $file.Length -or (Get-FileHash -LiteralPath $copy -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash){throw ('복사 파일 검증 실패: '+$relative)}
+    }
+    Write-Progress -Activity '앱 전체 파일 검증' -Completed
+    $codeBefore=Join-Path $Destination 'private\move-runtime-before'
+    New-Item -ItemType Directory -Path $codeBefore | Out-Null
+    foreach($name in $runtimeFiles.Keys){
+        $target=Join-Path $Destination ('server\'+$name)
+        if(Test-Path -LiteralPath $target){Copy-Item -LiteralPath $target -Destination $codeBefore}
+        Copy-Item -LiteralPath (Join-Path $RuntimePatch $name) -Destination $target -Force
     }
     Write-Host '새 위치의 명단·계정·기록·암호화 키 검증 중...'
     $raw=& $office.node $HelperPath $Destination
@@ -107,6 +130,11 @@ try {
         $tasksChanged=$true
         Set-ScheduledTask -TaskName $entry.Name -Action $action | Out-Null
     }
+    $oldIndex=Join-Path $Source 'server\index.mjs'
+    Copy-Item -LiteralPath $oldIndex -Destination (Join-Path $Source 'private\move-original-server-index.mjs') -ErrorAction Stop
+    $targetLiteral=$Destination | ConvertTo-Json -Compress
+    $sourceRetired=$true
+    [IO.File]::WriteAllText($oldIndex, ('console.error("BLACK moved to: " + '+$targetLiteral+');'+[Environment]::NewLine+'process.exit(1);'+[Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
     Enable-ScheduledTask -TaskName 'BLACK Office Server' | Out-Null
     $destinationStarted=$true
     Start-ScheduledTask -TaskName 'BLACK Office Server'
@@ -132,10 +160,6 @@ try {
     & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $Destination 'windows\office-backup.ps1')
     if($LASTEXITCODE -ne 0){throw '새 위치 서버는 실행 중이지만 이전 후 백업이 실패했습니다.'}
     @{source=$Source;destination=$Destination;verifiedAt=(Get-Date).ToString('o');dataSha256=$after.sha256;backupFolder=$backup.folder} | ConvertTo-Json | Set-Content (Join-Path $Destination 'private\app-move.json') -Encoding UTF8
-    $oldIndex=Join-Path $Source 'server\index.mjs'
-    Copy-Item -LiteralPath $oldIndex -Destination (Join-Path $Source 'private\move-original-server-index.mjs') -ErrorAction Stop
-    $targetLiteral=$Destination | ConvertTo-Json -Compress
-    [IO.File]::WriteAllText($oldIndex, ('console.error("BLACK moved to: " + '+$targetLiteral+');'+[Environment]::NewLine+'process.exit(1);'+[Environment]::NewLine), (New-Object Text.UTF8Encoding($false)))
     @('BLACK 앱은 다음 위치로 이전됐습니다:',$Destination,'이 폴더의 이전 DB를 실행하지 마세요. 새 위치 실행 및 재부팅 확인 후 정리할 수 있는 이전 사본입니다.') | Set-Content (Join-Path $Source 'APP-MOVED.txt') -Encoding UTF8
     Write-Host ('앱 이전·명단 일치·HTTPS 실행·자동 실행 경로 갱신 완료: '+$Destination) -ForegroundColor Green
     Write-Host '접속 주소와 직원 계정은 그대로입니다. 직원 PC에서는 작업할 필요가 없습니다.'
@@ -144,6 +168,7 @@ try {
     $message=$_.Exception.Message
     if($maintenance -and -not $destinationStarted) {
         try {
+            if($sourceRetired){Copy-Item -LiteralPath (Join-Path $Source 'private\move-original-server-index.mjs') -Destination (Join-Path $Source 'server\index.mjs') -Force}
             if($tasksChanged){Assert-BlackDatabaseStopped;Set-ScheduledTask -TaskName 'BLACK Office Server' -Action $serverAction|Out-Null;Set-ScheduledTask -TaskName 'BLACK Office Backup' -Action $backupAction|Out-Null}
             if($serverEnabled){
                 Enable-ScheduledTask -TaskName 'BLACK Office Server'|Out-Null

@@ -4,7 +4,7 @@ import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, readdir
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createHash} from 'node:crypto';
-import {applyDesignUpdate} from '../scripts/apply-design-update.mjs';
+import {applyDesignUpdate,findApp} from '../scripts/apply-design-update.mjs';
 
 function fixture() {
   const root=mkdtempSync(join(tmpdir(),'black-ui-update-'));
@@ -44,4 +44,16 @@ test('corrupt update or a path outside the UI is rejected before any file change
     assert.throws(()=>applyDesignUpdate(f.bundle,f.target),/경로/);
     assert.equal(readFileSync(join(f.target,'private/BLACK.env.backup'),'utf8'),'private key material');
   }finally {rmSync(f.root,{recursive:true,force:true});}
+});
+
+
+test('UI update targets verified Desktop relocation rather than the retired Downloads copy',()=>{
+ const profile=mkdtempSync(join(tmpdir(),'black-moved-ui-'));
+ try{
+  const desktop=join(profile,'Desktop','코덱스','BLACK'),downloads=join(profile,'Downloads','BLACK-recovery','BLACK');
+  for(const root of [desktop,downloads]){mkdirSync(join(root,'server'),{recursive:true});writeFileSync(join(root,'server','index.mjs'),'');writeFileSync(join(root,'package.json'),JSON.stringify({name:'black-recovery'}));}
+  assert.equal(findApp(profile),downloads);
+  mkdirSync(join(desktop,'private'));writeFileSync(join(desktop,'private','app-move.json'),JSON.stringify({destination:desktop}));
+  assert.equal(findApp(profile),desktop);
+ }finally{rmSync(profile,{recursive:true,force:true});}
 });
