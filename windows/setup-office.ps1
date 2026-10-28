@@ -75,6 +75,12 @@ try {
     New-Item -ItemType Directory -Force $backupDirectory | Out-Null
     Set-BlackPrivateAcl $private
     Set-BlackPrivateAcl $backupDirectory
+    Set-BlackPrivateAcl (Join-Path $AppPath 'data')
+    $runtimePath = Join-Path $AppPath 'data\runtime.json'
+    try {
+        $runtimeProbe = [IO.File]::Open($runtimePath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        $runtimeProbe.Dispose()
+    } catch { throw '기존 DB 접속 정보(data\runtime.json)를 읽을 수 없습니다. 이 파일은 삭제하거나 새로 만들지 마세요. 파일 권한 또는 보안 프로그램 차단을 확인해야 합니다.' }
     $keyPath = Join-Path $private 'BLACK.env.backup'
     try {
         $keyProbe = [IO.File]::Open($keyPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
