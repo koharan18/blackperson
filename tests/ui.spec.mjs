@@ -1,5 +1,6 @@
 import {test,expect} from '@playwright/test';
 import {mkdir} from 'node:fs/promises';
+import ExcelJS from 'exceljs';
 test('complete Korean console workflow and mobile navigation',async({page})=>{
   await page.goto('/login');
   await expect(page.getByRole('heading',{name:'로그인',exact:true})).toBeVisible();
@@ -147,4 +148,23 @@ test('rich bulk file keeps per-row reason, program and region while excluding mi
   await expect(page.getByRole('textbox',{name:'제한 사유',exact:true})).toHaveValue('개별사유가');
   await expect(page.getByRole('textbox',{name:'내부 메모',exact:true})).toHaveValue(/강북구/);
   await expect(page.getByRole('textbox',{name:'내부 메모',exact:true})).toHaveValue(/기존메모가/);
+});
+
+test('browser reads generated multi-sheet XLSX with Korean headers and text phones',async({page})=>{
+  const book=new ExcelJS.Workbook();
+  const sheet=book.addWorksheet('등록용_가상');
+  sheet.columns=[{header:'이름',key:'name'},{header:'전화번호',key:'phone'},{header:'참여 사업',key:'programName'},{header:'제한 사유',key:'reason'},{header:'내부 메모',key:'memo'}];
+  sheet.addRow({name:'엑셀검증가상',phone:'01087654321',programName:'엑셀사업',reason:'행별 사유',memo:'지역: 가상구'});
+  sheet.getColumn('phone').numFmt='@';sheet.views=[{state:'frozen',ySplit:1}];sheet.autoFilter='A1:E1';
+  for(const name of ['확인필요','중복기록','원문','정리안내'])book.addWorksheet(name).addRow(['가상 안내']);
+  const bytes=await book.xlsx.writeBuffer();
+  await page.goto('/login');
+  await page.getByLabel('아이디').fill('ui@example.invalid');
+  await page.getByLabel('비밀번호',{exact:true}).fill('Ui-test-password-123!');
+  await page.getByRole('button',{name:'관리 콘솔 접속'}).click();
+  await page.getByRole('link',{name:'일괄 등록',exact:true}).click();
+  await page.locator('#roster-file').setInputFiles({name:'가상명단.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(bytes)});
+  await expect(page.getByText('정상 1건 · 오류 0건',{exact:true})).toBeVisible();
+  await expect(page.getByRole('cell',{name:'엑셀검증가상',exact:true})).toBeVisible();
+  await expect(page.getByRole('cell',{name:'행별 사유',exact:true})).toBeVisible();
 });
