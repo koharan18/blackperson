@@ -40,8 +40,11 @@ function Set-BlackHostsEntry([string]$Address) {
 
 function Set-BlackPrivateAcl([string]$Path) {
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    & icacls.exe $Path /inheritance:r /grant:r "*$($sid):(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' /T /C | Out-Null
+    # Files need direct grants; inheritance flags apply to directories, not files.
+    & icacls.exe $Path /inheritance:r /grant:r "*$($sid):F" '*S-1-5-18:F' '*S-1-5-32-544:F' /T /C | Out-Null
     if ($LASTEXITCODE -ne 0) { throw '비공개 폴더 접근 권한을 설정하지 못했습니다.' }
+    & icacls.exe $Path /grant:r "*$($sid):(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw '비공개 폴더 상속 권한을 설정하지 못했습니다.' }
 }
 
 function Set-BlackEnv([string]$Path, [hashtable]$Values) {

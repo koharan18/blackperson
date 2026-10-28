@@ -75,11 +75,17 @@ try {
     New-Item -ItemType Directory -Force $backupDirectory | Out-Null
     Set-BlackPrivateAcl $private
     Set-BlackPrivateAcl $backupDirectory
+    $keyPath = Join-Path $private 'BLACK.env.backup'
+    try {
+        $keyProbe = [IO.File]::Open($keyPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+        $keyProbe.Dispose()
+    } catch { throw '원본 환경 키 파일을 읽을 수 없습니다. 파일 권한 또는 보안 프로그램의 접근 차단을 확인해야 합니다. 키 파일은 삭제하거나 새로 만들지 마세요.' }
     Set-Location $AppPath
     Write-Host '기존 명단과 계정의 안전 백업을 먼저 만듭니다.'
     $backupOutput = & $blackNode (Join-Path $AppPath 'scripts\backup.mjs') --output $backupDirectory --json
     if ($LASTEXITCODE -ne 0) { throw '안전 백업에 실패해 설정을 중단했습니다.' }
     $safetyBackup = $backupOutput | ConvertFrom-Json
+    if (-not $safetyBackup.folder -or -not (Test-Path -LiteralPath (Join-Path $safetyBackup.folder 'black.black')) -or -not (Test-Path -LiteralPath (Join-Path $safetyBackup.folder 'manifest.json'))) { throw '안전 백업 결과 파일을 확인할 수 없어 중단했습니다.' }
     Write-Host ('안전 백업 완료: ' + $safetyBackup.folder)
 
     Write-Host '알려주신 직원 공통 비밀번호를 입력하세요. 화면과 로그에는 표시되지 않습니다.'

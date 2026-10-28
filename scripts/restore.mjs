@@ -36,3 +36,6 @@ try {
   console.log('복원·전화번호 복호화·참조 무결성 검증 완료:', counts);
 } catch(e) { console.error(e.message); process.exitCode = 1; }
 finally { if (db) await db.stop(); }
+
+// Preserve CLI failures: embedded-postgres registers a beforeExit hook with code 0.
+process.exit(process.exitCode || 0);

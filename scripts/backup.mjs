@@ -17,3 +17,6 @@ try {
   else{console.log('백업 완료:',folder);console.log('이 폴더와 앱 코드를 외장 드라이브에도 보관하세요. 키 파일은 비밀 정보를 포함합니다.');}
 } catch(e) { console.error(e.message); process.exitCode = 1; }
 finally { if (db) await db.stop(); }
+
+// Preserve CLI failures: embedded-postgres registers a beforeExit hook with code 0.
+process.exit(process.exitCode || 0);

@@ -10,5 +10,8 @@ try{
   const result=await setupOfficeAccounts(db.pool,input.password);
   input.password='';
   console.log('직원 계정 설정 완료:',JSON.stringify(result));
-}catch(error){console.error('직원 계정 설정 실패:',error.code||((error.message||'').includes('비밀번호')?error.message:'입력 또는 데이터베이스 상태를 확인해 주세요.'));process.exitCode=1;}
+}catch(error){console.error('직원 계정 설정 실패:',error.code||((error.message||'').includes('비밀번호')|| (error.message||'').includes('보안 입력')?error.message:'입력 또는 데이터베이스 상태를 확인해 주세요.'));process.exitCode=1;}
 finally{if(db)await db.stop();}
+
+// Preserve CLI failures: embedded-postgres registers a beforeExit hook with code 0.
+process.exit(process.exitCode || 0);

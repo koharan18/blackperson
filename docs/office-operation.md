@@ -59,3 +59,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\office-backup.
 정상 종료는 비공개 로컬 제어 파이프의 인증된 요청을 사용합니다. 네트워크에 종료 API를 노출하지 않습니다. 일시 중지를 먼저 하지 않으면 작업 스케줄러가 종료된 서버를 다시 시작할 수 있습니다. 일반 `npm start` 창으로 실행한 서버는 기존처럼 Ctrl+C를 사용합니다.
 
 로그는 `private/office-logs`에 있습니다. 설정 실패 시 `office-status.ps1` 출력과 작업 스케줄러의 마지막 실행 결과로 진단합니다. `private` 전체나 키 파일을 직원에게 전달하지 마세요.
+
+## 원본 키 파일 접근 오류
+
+`EPERM ... private\BLACK.env.backup`은 원본 키 파일을 열지 못한 상태입니다. 키를 새로 만들거나 삭제하지 마세요. 수정 설치기는 파일 직접 권한과 폴더 상속 권한을 나누어 적용하고 읽기를 검사합니다. 여전히 실패하면 Windows ACL 또는 보안 프로그램 차단을 실제 PC에서 확인해야 합니다. 실패한 CLI의 종료 코드가 embedded runtime의 beforeExit 훅에서 0으로 바뀌던 문제도 수정했으며, 백업 파일 실재 확인 전에는 직원 계정 변경을 진행하지 않습니다.
