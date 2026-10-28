@@ -25,3 +25,6 @@ jobs:
           $text = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)
           [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($true)))
           ./tests/certificate.windows.ps1
+      - name: Server network restoration plan with mocked OS operations
+        shell: powershell
+        run: ./tests/office-network.ps1

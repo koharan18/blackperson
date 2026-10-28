@@ -65,3 +65,7 @@ Start-ScheduledTask -TaskName 'BLACK Office Backup'
 `EPERM ... private\BLACK.env.backup`은 원본 키 파일을 열지 못한 상태입니다. 키를 새로 만들거나 삭제하지 마세요. 수정 설치기는 파일 직접 권한과 폴더 상속 권한을 나누어 적용하고 읽기를 검사합니다. 여전히 실패하면 Windows ACL 또는 보안 프로그램 차단을 실제 PC에서 확인해야 합니다. 실패한 CLI의 종료 코드가 embedded runtime의 beforeExit 훅에서 0으로 바뀌던 문제도 수정했으며, 백업 파일 실재 확인 전에는 직원 계정 변경을 진행하지 않습니다.
 
 Windows의 DB 시작은 PostgreSQL 공식 pg_ctl의 제한 토큰 실행 기능을 사용합니다. Node/설치기 권한과 별도로 PostgreSQL 프로세스에서 Administrators/Power Users 그룹 및 권한을 제거합니다. 임시 S4U 작업·설치기 파이프를 사용하지 않습니다. DB를 시작한 프로세스만 pg_ctl fast 종료를 수행하며 이미 실행 중인 동일 클러스터에 연결한 백업은 서버를 종료하지 않습니다.
+
+## 기존 링크를 서버 PC만으로 복원
+
+사용자 확인으로 초기화 전 PC 자체가 GB-8234였고 현재 이름 WINDOWS-71LEUCG, 이더넷 프로필 Public임이 드러났습니다. 직원 PC마다 hosts/신뢰를 설치하는 방식 대신 서버 PC의 원래 이름과 사내망 프로필을 복원합니다. `windows/restore-office-host.ps1`은 해당 서버의 이더넷만 Private으로 바꾸고 LocalSubnet에 TCP443, UDP137/5355를 허용합니다. NetBIOS 이름 조회를 켜고 예약 작업의 사용자 SID를 보존한 뒤 이름을 GB-8234로 예약 변경합니다. 도메인 가입 PC는 자동 이름 변경하지 않으며 재부팅도 자동 실행하지 않습니다. 기존 명단·직원 계정·TLS 파일은 바꾸지 않습니다. 이름 변경 후에는 저장한 작업을 닫고 서버 PC를 재부팅해야 합니다. 실제 직원 브라우저의 이름 해석 및 HTTPS 신뢰 결과는 재부팅 후 확인합니다. 이 절차에는 직원 PC 명령 실행이나 ZIP 배포가 없습니다.
