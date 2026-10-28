@@ -1,7 +1,8 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFileSync,existsSync} from 'node:fs';
-import {join} from 'node:path';
+import {join,dirname,basename} from 'node:path';
+import {windowsDirectoryAlias} from './windows-paths.mjs';
 const run=promisify(execFile);
 
 export async function windowsPgCtlPath(){
@@ -15,6 +16,12 @@ export async function windowsPgCtlPath(){
 // postgres.exe directly from the administrative installer.
 export async function startControlledPostgres({executable,directory,port,logFile=join(directory,'black-postgres.log')}){
   if(!Number.isInteger(port)||port<1||port>65535)throw new Error('Invalid database port');
+  if(process.platform==='win32'){
+    const nativeRoot=dirname(dirname(executable));
+    executable=join(windowsDirectoryAlias(nativeRoot),'bin',basename(executable));
+    directory=windowsDirectoryAlias(directory);
+    logFile=join(windowsDirectoryAlias(dirname(logFile)),basename(logFile));
+  }
   try{
     await run(executable,['start','-D',directory,'-l',logFile,'-w','-t','30','-o',`-h 127.0.0.1 -p ${port}`],{windowsHide:true,timeout:40000,maxBuffer:65536});
   }catch(error){

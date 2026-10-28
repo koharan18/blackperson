@@ -6,6 +6,7 @@ import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import {windowsPgCtlPath,startControlledPostgres} from './pg-control.mjs';
+import {canonicalDirectory} from './windows-paths.mjs';
 
 // Prisma stores these timestamp-without-time-zone columns as UTC.
 // Keep decoding identical on Korean Windows and the UTC build machine.
@@ -38,7 +39,7 @@ export async function startDatabase({ directory = join(root, 'data'), port = 154
     try {
       await probe.connect();
       const location = (await probe.query('SHOW data_directory')).rows[0].data_directory;
-      if (resolve(location) !== resolve(cluster)) throw new Error('이 포트는 다른 PostgreSQL 인스턴스가 사용 중입니다.');
+      if (canonicalDirectory(location) !== canonicalDirectory(cluster)) throw new Error('이 포트는 다른 PostgreSQL 인스턴스가 사용 중입니다.');
       const pool = createPool({ ...settings, database });
       return { pool, settings: { ...settings, database }, reused: true, async stop() { await pool.end(); } };
     } catch(e) { if (e.code !== 'ECONNREFUSED') throw e; }
