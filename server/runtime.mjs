@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import {windowsPgCtlPath,startControlledPostgres} from './pg-control.mjs';
 
 // Prisma stores these timestamp-without-time-zone columns as UTC.
 // Keep decoding identical on Korean Windows and the UTC build machine.
@@ -50,7 +51,10 @@ export async function startDatabase({ directory = join(root, 'data'), port = 154
     onLog: message => { startupLog=(startupLog+String(message)).slice(-6000); }, onError: () => {},
   });
   if (!existsSync(join(cluster, 'PG_VERSION'))) await embedded.initialise();
-  try { await embedded.start(); } catch { throw new Error('로컬 PostgreSQL을 시작할 수 없습니다: '+startupLog); }
+  let windowsControl;
+  if(process.platform==='win32')windowsControl=await startControlledPostgres({executable:await windowsPgCtlPath(),directory:cluster,port});
+  else {try { await embedded.start(); } catch { throw new Error('로컬 PostgreSQL을 시작할 수 없습니다: '+startupLog); }}
+  const stopPostgres=()=>windowsControl?windowsControl.stop():embedded.stop();
   const admin = new pg.Client({ ...settings, database: 'postgres' });
   try {
     await admin.connect();
@@ -59,11 +63,11 @@ export async function startDatabase({ directory = join(root, 'data'), port = 154
       if (!/^[a-z][a-z0-9_]*$/.test(database)) throw new Error('Invalid local database name');
       await admin.query(`CREATE DATABASE "${database}"`);
     }
-  } catch (e) { await embedded.stop(); throw e; }
+  } catch (e) { await stopPostgres(); throw e; }
   finally { await admin.end(); }
   const pool = createPool({ ...settings, database });
   return {
     pool, settings: { ...settings, database },
-    async stop() { await pool.end(); await embedded.stop(); },
+    async stop() { await pool.end(); await stopPostgres(); },
   };
 }

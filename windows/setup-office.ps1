@@ -88,7 +88,8 @@ try {
     } catch { throw '원본 환경 키 파일을 읽을 수 없습니다. 파일 권한 또는 보안 프로그램의 접근 차단을 확인해야 합니다. 키 파일은 삭제하거나 새로 만들지 마세요.' }
     Set-Location $AppPath
     Write-Host '기존 명단과 계정의 안전 백업을 먼저 만듭니다.'
-    $backupOutput = Invoke-BlackLimitedJob $AppPath @{job='backup';outputDirectory=$backupDirectory}
+    $backupOutput = & $blackNode (Join-Path $AppPath 'scripts\backup.mjs') --output $backupDirectory --json
+    if ($LASTEXITCODE -ne 0) { throw '안전 백업에 실패해 설정을 중단했습니다.' }
     $safetyBackup = $backupOutput | ConvertFrom-Json
     if (-not $safetyBackup.folder -or -not (Test-Path -LiteralPath (Join-Path $safetyBackup.folder 'black.black')) -or -not (Test-Path -LiteralPath (Join-Path $safetyBackup.folder 'manifest.json'))) { throw '안전 백업 결과 파일을 확인할 수 없어 중단했습니다.' }
     Write-Host ('안전 백업 완료: ' + $safetyBackup.folder)
@@ -100,7 +101,8 @@ try {
     try {
         $plain = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($pointer)
         $OutputEncoding = New-Object Text.UTF8Encoding($false)
-        Invoke-BlackLimitedJob $AppPath @{job='accounts';password=$plain} | Write-Host
+        @{ password = $plain } | ConvertTo-Json -Compress | & $blackNode (Join-Path $AppPath 'scripts\setup-office-accounts.mjs')
+        if ($LASTEXITCODE -ne 0) { throw '직원 계정 설정에 실패했습니다.' }
     } finally {
         $OutputEncoding = $oldEncoding
         [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($pointer)
@@ -172,7 +174,8 @@ try {
         Start-Sleep -Seconds 2
     }
     if (-not $ready) { throw '예약 작업은 등록했지만 HTTPS 준비 확인에 실패했습니다. private\office-logs와 작업 스케줄러의 마지막 실행 결과를 확인해 주세요.' }
-    Invoke-BlackLimitedJob $AppPath @{job='office-backup'} | Write-Host
+    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $AppPath 'windows\office-backup.ps1')
+    if ($LASTEXITCODE -ne 0) { throw '최종 코드·데이터 백업이 실패했습니다.' }
     Write-Host '서버 설정 및 현재 HTTPS 응답 확인 완료: https://GB-8234/login' -ForegroundColor Green
     Write-Host ('직원 PC에 전달할 공개 접속 설정 ZIP: ' + $clientZip)
     Write-Host ('자동 백업 폴더: ' + $backupDirectory)

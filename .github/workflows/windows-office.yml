@@ -14,6 +14,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install production dependencies
+        run: npm ci --omit=dev --no-audit --no-fund
       - name: Exercise Windows PowerShell and limited scheduled task
         shell: pwsh
         run: |
@@ -23,7 +25,7 @@ jobs:
           }
           $stdout = Join-Path $env:RUNNER_TEMP 'office-probe-out.txt'
           $stderr = Join-Path $env:RUNNER_TEMP 'office-probe-err.txt'
-          $probe = Start-Process powershell.exe -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('"' + (Join-Path $PWD 'tests/office-worker.windows.ps1') + '"')) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          $probe = Start-Process node.exe -ArgumentList @(('"' + (Join-Path $PWD 'tests/pg-control.windows.mjs') + '"')) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
           $completed = $probe.WaitForExit(90000)
           $report = New-Object Collections.Generic.List[string]
           $report.Add('Completed: ' + $completed)
@@ -51,4 +53,4 @@ jobs:
           git add windows-result.txt
           git commit -m 'Record synthetic Windows worker check'
           git push origin "HEAD:refs/heads/$branch"
-          if (-not $completed -or $probe.ExitCode -ne 0) { throw 'Windows worker check failed; see synthetic diagnostic branch.' }
+          if (-not $completed -or $probe.ExitCode -ne 0) { throw 'Windows PostgreSQL check failed; see synthetic diagnostic branch.' }
