@@ -8,12 +8,12 @@ import {randomBytes} from 'node:crypto';
 import {startDatabase} from '../server/runtime.mjs';
 import {windowsPgCtlPath} from '../server/pg-control.mjs';
 const run=promisify(execFile);
-let db,folder,exit=0;
+let db,folder,exit=0;const progress=[];let failure='';
 try{
  assert.equal(process.platform,'win32');
  const admin=execFileSync('powershell.exe',['-NoProfile','-Command','([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)'],{encoding:'utf8'}).trim();
  assert.equal(admin,'True','test must exercise elevated Node');
- console.log('Elevated orchestrator confirmed.');
+ console.log('Elevated orchestrator confirmed.');progress.push('elevated');
  folder=mkdtempSync(join(tmpdir(),'black-pg-코덱스-'));
  const sid=execFileSync('powershell.exe',['-NoProfile','-Command','[Security.Principal.WindowsIdentity]::GetCurrent().User.Value'],{encoding:'utf8'}).trim();
  execFileSync('icacls.exe',[folder,'/grant:r',`*${sid}:(OI)(CI)F`]);
@@ -34,7 +34,7 @@ try{
   await new Promise(r=>setTimeout(r,100));
  }
  assert.ok(initialized,'restricted fixture initdb must finish: '+(existsSync(log)?readFileSync(log,'utf8'):'no log'));
- console.log('Restricted fixture initialization passed.');
+ console.log('Restricted fixture initialization passed.');progress.push('initialized');
  db=await startDatabase({directory,port:15443});
  assert.equal((await db.pool.query('SELECT current_user AS name')).rows[0].name,'black_local');
  await db.pool.query('CREATE TABLE native_control_probe (id integer PRIMARY KEY)');
@@ -47,6 +47,7 @@ try{
  assert.equal((await db.pool.query('SELECT count(*)::int n FROM native_control_probe')).rows[0].n,1);
  await db.stop();db=null;
  console.log('PASS: elevated Windows Node -> restricted PostgreSQL, authenticated query, reuse, fast stop, persisted restart.');
-}catch(error){exit=1;console.error(error.stack||error.message);}
+}catch(error){exit=1;failure=error.stack||error.message;console.error(failure);}
 finally{if(db)try{await db.stop();}catch{};if(folder&&exit===0)rmSync(folder,{recursive:true,force:true});}
+if(process.env.RUNNER_TEMP)writeFileSync(join(process.env.RUNNER_TEMP,'black-native-result.json'),JSON.stringify({exit,progress,failure},null,2));
 process.exit(exit);

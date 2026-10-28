@@ -4,7 +4,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   postgres:
     runs-on: windows-latest
@@ -28,3 +28,18 @@ jobs:
       - name: Server network restoration plan with mocked OS operations
         shell: powershell
         run: ./tests/office-network.ps1
+      - name: Publish synthetic native path check
+        if: always()
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'black-native-result.json'
+          if (-not (Test-Path $report)) { exit 0 }
+          $branch = 'native-path-check-' + $env:GITHUB_RUN_ID
+          git config user.name 'BLACK Windows checks'
+          git config user.email 'actions@users.noreply.github.com'
+          git checkout --orphan $branch
+          git rm -r --cached . | Out-Null
+          Copy-Item $report native-path-result.json
+          git add native-path-result.json
+          git commit -m 'Record synthetic Windows native path verification'
+          git push origin "HEAD:refs/heads/$branch"
