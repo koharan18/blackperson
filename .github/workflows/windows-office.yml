@@ -4,7 +4,7 @@ on:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   worker:
     runs-on: windows-latest
@@ -15,10 +15,40 @@ jobs:
         with:
           node-version: '24'
       - name: Exercise Windows PowerShell and limited scheduled task
-        shell: powershell
+        shell: pwsh
         run: |
           Get-ChildItem windows,tests -Filter *.ps1 -Recurse | ForEach-Object {
             $text = [IO.File]::ReadAllText($_.FullName, [Text.Encoding]::UTF8)
             [IO.File]::WriteAllText($_.FullName, $text, (New-Object Text.UTF8Encoding($true)))
           }
-          ./tests/office-worker.windows.ps1
+          $stdout = Join-Path $env:RUNNER_TEMP 'office-probe-out.txt'
+          $stderr = Join-Path $env:RUNNER_TEMP 'office-probe-err.txt'
+          $probe = Start-Process powershell.exe -ArgumentList @('-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',('"' + (Join-Path $PWD 'tests/office-worker.windows.ps1') + '"')) -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          $completed = $probe.WaitForExit(90000)
+          $report = New-Object Collections.Generic.List[string]
+          $report.Add('Completed: ' + $completed)
+          if ($completed) { $report.Add('Exit: ' + $probe.ExitCode) }
+          $report.Add('STDOUT:'); if (Test-Path $stdout) { $report.Add((Get-Content $stdout -Raw)) }
+          $report.Add('STDERR:'); if (Test-Path $stderr) { $report.Add((Get-Content $stderr -Raw)) }
+          $fixtures = Get-ChildItem $env:TEMP -Directory -Filter 'black-worker-test-*'
+          foreach ($fixture in $fixtures) {
+            Get-ChildItem (Join-Path $fixture.FullName 'private') -Filter '*.log' -ErrorAction SilentlyContinue | ForEach-Object { $report.Add($_.Name); $report.Add((Get-Content $_.FullName -Raw)) }
+            Get-ScheduledTask | Where-Object { $_.TaskName -like 'BLACK Setup Worker*' -and $_.Actions.Arguments -like ('*' + $fixture.FullName + '*') } | ForEach-Object {
+              $info = $_ | Get-ScheduledTaskInfo
+              $report.Add(('Task: ' + $_.State + ' result: ' + $info.LastTaskResult))
+              if (-not $completed) { $_ | Stop-ScheduledTask }
+            }
+          }
+          if (-not $completed) { Stop-Process -Id $probe.Id -Force }
+          $result = $report -join "`n"
+          Write-Host $result
+          $branch = 'office-worker-diagnostics-' + $env:GITHUB_RUN_ID
+          git config user.name 'BLACK Windows checks'
+          git config user.email 'actions@users.noreply.github.com'
+          git checkout --orphan $branch
+          git rm -r --cached . | Out-Null
+          [IO.File]::WriteAllText((Join-Path $PWD 'windows-result.txt'), $result)
+          git add windows-result.txt
+          git commit -m 'Record synthetic Windows worker check'
+          git push origin "HEAD:refs/heads/$branch"
+          if (-not $completed -or $probe.ExitCode -ne 0) { throw 'Windows worker check failed; see synthetic diagnostic branch.' }
