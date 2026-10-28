@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+private/
+data/
+backups/
+test-results/
+playwright-report/
+.superpowers/
+*.log
+*.dump
+*.backup
+.ui-backups/
+BLACK-staff-connect.zip
