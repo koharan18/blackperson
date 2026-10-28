@@ -64,4 +64,4 @@ Start-ScheduledTask -TaskName 'BLACK Office Backup'
 
 `EPERM ... private\BLACK.env.backup`은 원본 키 파일을 열지 못한 상태입니다. 키를 새로 만들거나 삭제하지 마세요. 수정 설치기는 파일 직접 권한과 폴더 상속 권한을 나누어 적용하고 읽기를 검사합니다. 여전히 실패하면 Windows ACL 또는 보안 프로그램 차단을 실제 PC에서 확인해야 합니다. 실패한 CLI의 종료 코드가 embedded runtime의 beforeExit 훅에서 0으로 바뀌던 문제도 수정했으며, 백업 파일 실재 확인 전에는 직원 계정 변경을 진행하지 않습니다.
 
-관리자 설치기는 DB를 직접 시작하지 않습니다. 백업·직원 계정 설정은 현재 계정의 S4U Limited 임시 작업으로 실행하며, 비밀번호는 로컬 파이프/표준 입력으로만 전달합니다. 실행기 역시 관리자 토큰이면 DB 시작 전에 거부합니다. S4U 실행이 회사 정책으로 차단되면 권한을 올려 우회하지 않고 오류로 중단합니다.
+Windows의 DB 시작은 PostgreSQL 공식 pg_ctl의 제한 토큰 실행 기능을 사용합니다. Node/설치기 권한과 별도로 PostgreSQL 프로세스에서 Administrators/Power Users 그룹 및 권한을 제거합니다. 임시 S4U 작업·설치기 파이프를 사용하지 않습니다. DB를 시작한 프로세스만 pg_ctl fast 종료를 수행하며 이미 실행 중인 동일 클러스터에 연결한 백업은 서버를 종료하지 않습니다.

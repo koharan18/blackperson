@@ -50,7 +50,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\SETUP-SERVER.ps1 -App
 문서\\BLACK-Backups는 PC 내부 백업입니다. 외장 드라이브에도 이 폴더를 복사하세요.
 GitHub에는 코드만 보관하며 명단/비밀번호/키를 올리지 않습니다.
 
-이 패키지는 Linux에서 코드/계정/백업/종료 로직을 검증했습니다.
+Linux 코드/계정/백업 테스트와 실제 Windows의 관리자 실행→제한된 PostgreSQL 시작/조회/종료/재시작을 검증했습니다.
 Windows 인증서·방화벽·작업 스케줄러는 실제 PC에서 설정 결과와 재부팅 후 동작을 확인해야 합니다.
 회사 정책이 S4U/배치 로그온을 막거나 네트워크가 Public이면 IT 담당자의 조치가 필요할 수 있습니다.
 실패하면 기존 앱 폴더의 windows\\office-status.ps1 출력을 확인하세요. private 파일은 공유하지 마세요.

@@ -1,5 +1,10 @@
 ﻿param([Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{40}$')][string]$Revision)
 $ErrorActionPreference = 'Stop'
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    $child = Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',('"' + $PSCommandPath + '"'),'-Revision',$Revision) -Wait -PassThru
+    exit $child.ExitCode
+}
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $downloadRoot = Join-Path $env:USERPROFILE 'Downloads'
 $manifestFile = Get-ChildItem -LiteralPath $downloadRoot -Filter 'office-manifest.json' -File -Recurse -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
@@ -8,12 +13,13 @@ $setupRoot = $manifestFile.Directory.FullName
 $manifest = Get-Content -LiteralPath $manifestFile.FullName -Raw | ConvertFrom-Json
 if ($manifest.format -ne 'BLACK-OFFICE-UPDATE-1') { throw '기존 설치기 형식이 다릅니다.' }
 $hashes = @{
-    'windows/office-common.ps1' = 'd9ae1b0f212f1a8eea51a7a18812159de3a99a960971c8149b65988a65091f21'
-    'windows/office-worker.ps1' = 'cd81614b72318b2b106e7032909fdda51431cd2d339525facd225af0d48a841e'
-    'windows/setup-office.ps1' = '0c32c74c17610d5521459a72a44e9218bbd4931fab4dd576e6833e535ab027ae'
-    'windows/office-run.ps1' = '854716a40d81ee2c7198072739e5b10ebe11b78ae9131c91c06926adaeda69b0'
-    'windows/office-backup.ps1' = '0597550838a736f09320e557c70ca8ec3d6d4650c8d1938a07ee441ed84d5cea'
+    'windows/office-common.ps1' = 'b965d02c19e0b4b434567d7fe0a2da7744fa903f0eb3a96a2a3be9548176536e'
+    'windows/setup-office.ps1' = '608442cb2e0a5916b67e95c40b159677a310fc3775238b050f5c96f0c6362942'
+    'windows/office-run.ps1' = '9af2f44e85296331558573287c3e589e7e60c800d785d4bc2ae298355759fcf9'
+    'windows/office-backup.ps1' = '9a870aeb78f84579497d3a64671aae9d0fbcdfc7de5c16b3aa39b7a5d16556a6'
     'server/index.mjs' = '834ccc28cee10b472742db460d224f082eed8bd9127ad6987be165de439f6b2c'
+    'server/runtime.mjs' = 'daee35d118835ec96e95c167fb1d89e7dab29d3114f8e4447e58c737757499ce'
+    'server/pg-control.mjs' = '1f3854aea9987ff6566f561710feb8fa07e1123d3f847a05c0925e75ed19cf9f'
     'scripts/backup.mjs' = '855d36636c4ddff491c6726d35694027b5c51c946240ea61af5119d9ab3cab17'
     'scripts/restore.mjs' = 'fe38309de8d096ec3032b75534ac9d19e186dbf090927147483fc209b606edc3'
     'scripts/setup-office-accounts.mjs' = '85d848916542196c05e275562bc9dd37d4cd12924c6e22dc5254a94ac41f8a2b'
@@ -37,6 +43,32 @@ foreach ($name in $hashes.Keys) {
     }
     $content[$name] = $bytes
 }
+# Retire only obsolete setup helpers, never a live PostgreSQL or Node child.
+$appRoot = Join-Path $downloadRoot 'BLACK-recovery\BLACK'
+$obsolete = @(Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskName -like 'BLACK Setup Worker *' -and $_.Actions.Arguments -like ('*' + $appRoot + '*') })
+if ($obsolete.Count) {
+    if (Get-Process postgres -ErrorAction SilentlyContinue) { throw 'PostgreSQL이 실행 중이므로 중지하지 않았습니다. DB 작업이 끝난 뒤 다시 실행해야 합니다.' }
+    $processes = @(Get-CimInstance Win32_Process)
+    $workers = @($processes | Where-Object { $_.Name -eq 'powershell.exe' -and $_.CommandLine -like ('*' + $appRoot + '\windows\office-worker.ps1*') })
+    $workerIDs = @($workers | ForEach-Object { $_.ProcessId })
+    if (@($processes | Where-Object { $_.ParentProcessId -in $workerIDs }).Count) { throw '이전 작업에 실행 중인 자식 프로세스가 있어 강제로 중단하지 않았습니다.' }
+    $oldSetup = @($processes | Where-Object { $_.Name -eq 'powershell.exe' -and $_.ProcessId -ne $PID -and $_.CommandLine -like ('*' + (Join-Path $setupRoot 'SETUP-SERVER.ps1') + '*') })
+    foreach ($process in $oldSetup) { Stop-Process -Id $process.ProcessId -ErrorAction Stop }
+    Start-Sleep -Seconds 2
+    foreach ($task in $obsolete) {
+        $state = Get-ScheduledTask -TaskName $task.TaskName -ErrorAction SilentlyContinue
+        if ($state -and $state.State -eq 'Running') {
+            if (Get-Process postgres -ErrorAction SilentlyContinue) { throw 'DB가 시작되어 이전 작업을 강제 종료하지 않았습니다.' }
+            $current = @(Get-CimInstance Win32_Process)
+            if (@($current | Where-Object { $_.ParentProcessId -in $workerIDs }).Count) { throw '이전 작업이 자식 프로세스를 시작하여 중단하지 않았습니다.' }
+            Stop-ScheduledTask -TaskName $task.TaskName
+        }
+        Unregister-ScheduledTask -TaskName $task.TaskName -Confirm:$false -ErrorAction Stop
+    }
+    Write-Host 'DB를 실행하지 못하고 대기 중이던 이전 설치 작업만 정리했습니다.'
+}
+$manifest.files.PSObject.Properties.Remove('windows/office-worker.ps1')
+$manifest.files.PSObject.Properties.Remove('tests/office-worker.windows.ps1')
 $before = Join-Path $setupRoot ('installer-before-repair-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
 New-Item -ItemType Directory -Force $before | Out-Null
 Copy-Item -LiteralPath $manifestFile.FullName -Destination $before
