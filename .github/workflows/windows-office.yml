@@ -1,0 +1,45 @@
+name: Windows PostgreSQL runtime
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  postgres:
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm ci --omit=dev --no-audit --no-fund
+      - name: Elevated Windows start, query, reuse, stop and persisted restart
+        shell: powershell
+        run: node tests/pg-control.windows.mjs
+      - name: Certificate SAN compatibility and expiry
+        shell: powershell
+        run: |
+          $path = Join-Path $PWD 'windows/office-common.ps1'
+          $text = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8)
+          [IO.File]::WriteAllText($path, $text, (New-Object Text.UTF8Encoding($true)))
+          ./tests/certificate.windows.ps1
+      - name: Server network restoration plan with mocked OS operations
+        shell: powershell
+        run: ./tests/office-network.ps1
+      - name: Publish synthetic native path check
+        if: always()
+        shell: pwsh
+        run: |
+          $report = Join-Path $env:RUNNER_TEMP 'black-native-result.json'
+          if (-not (Test-Path $report)) { exit 0 }
+          $branch = 'native-path-check-' + $env:GITHUB_RUN_ID
+          git config user.name 'BLACK Windows checks'
+          git config user.email 'actions@users.noreply.github.com'
+          git checkout --orphan $branch
+          git rm -r --cached . | Out-Null
+          Copy-Item $report native-path-result.json
+          git add native-path-result.json
+          git commit -m 'Record synthetic Windows native path verification'
+          git push origin "HEAD:refs/heads/$branch"
