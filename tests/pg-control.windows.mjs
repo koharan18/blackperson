@@ -14,7 +14,7 @@ try{
  const admin=execFileSync('powershell.exe',['-NoProfile','-Command','([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)'],{encoding:'utf8'}).trim();
  assert.equal(admin,'True','test must exercise elevated Node');
  console.log('Elevated orchestrator confirmed.');
- folder=mkdtempSync(join(tmpdir(),'black-pg-control-'));
+ folder=mkdtempSync(join(tmpdir(),'black-pg-코덱스-'));
  const sid=execFileSync('powershell.exe',['-NoProfile','-Command','[Security.Principal.WindowsIdentity]::GetCurrent().User.Value'],{encoding:'utf8'}).trim();
  execFileSync('icacls.exe',[folder,'/grant:r',`*${sid}:(OI)(CI)F`]);
  const directory=join(folder,'data');mkdirSync(directory);
