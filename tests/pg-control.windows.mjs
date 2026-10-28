@@ -24,9 +24,10 @@ try{
  const executable=await windowsPgCtlPath();
  const {initdb}=await import('@embedded-postgres/windows-x64');
  const log=join(folder,'init.log');
- // Fixture only: pg_ctl's documented alternate executable option applies its
+ const launcher=join(folder,'init-launcher');mkdirSync(launcher);writeFileSync(join(launcher,'PG_VERSION'),'18\n');
+ // Fixture only: a separate launcher directory lets pg_ctl apply its
  // restricted launcher to initdb too. Production never reinitializes a cluster.
- await run(executable,['start','-D',cluster,'-p',initdb,'-o',`-U black_local --auth=scram-sha-256 --pwfile="${pwfile}" --encoding=UTF8 --locale=C`,'-l',log,'-W'],{windowsHide:true,timeout:15000});
+ await run(executable,['start','-D',launcher,'-p',initdb,'-o',`-D "${cluster}" -U black_local --auth=scram-sha-256 --pwfile="${pwfile}" --encoding=UTF8 --locale=C`,'-l',log,'-W'],{windowsHide:true,timeout:15000});
  let initialized=false;
  for(let i=0;i<200;i++){
   if(existsSync(log)&&readFileSync(log,'utf8').includes('Success.')){initialized=true;break;}
