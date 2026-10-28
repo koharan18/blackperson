@@ -46,6 +46,18 @@ test('space-separated phones and commas inside a free-text reason remain accepte
   assert.equal(comma[0].reason,'당일 취소, 연락 없음');
 });
 
+test('reservation exports detect the second-row header and applicant mobile columns',async()=>{
+  const wb=new ExcelJS.Workbook(),sheet=wb.addWorksheet('예약현황');
+  sheet.addRow(['예약현황조회']);
+  sheet.addRow(['순번','신청자명','핸드폰번호','신청하신 사유/궁금하신 내용']);
+  sheet.addRow([1,'가상신청가','01012345678','신청자의 일반 문의']);
+  sheet.addRow([2,'가상신청나','1099998888','사업 신청 사유']);
+  const bytes=await wb.xlsx.writeBuffer();
+  const rows=await readRosterFile({name:'예약현황조회.xlsx',arrayBuffer:async()=>bytes});
+  assert.deepEqual(rows,[{name:'가상신청가',phone:'01012345678'},{name:'가상신청나',phone:'01099998888'}]);
+  assert.ok(rows.every(row=>!row.reason),'applicant questionnaire must never become restriction reasons');
+});
+
 test('XLSX import preserves text phones and export writes literal strings not formulas',async()=>{
   const w=new ExcelJS.Workbook(),s=w.addWorksheet('명단');
   s.addRow(['이름','전화번호']);s.addRow(['홍길동','01012345678']);

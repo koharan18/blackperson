@@ -12,8 +12,8 @@ function phoneText(value) {
 }
 
 const aliases={
-  name:['이름','성명','대상자명','name'],
-  phone:['전화번호','연락처','휴대폰','휴대전화','휴대폰번호','phone','mobile'],
+  name:['이름','성명','성함','대상자명','신청자명','신청자성명','예약자명','참여자명','회원명','회원이름','고객명','name'],
+  phone:['전화번호','연락처','휴대폰','휴대전화','휴대폰번호','휴대전화번호','핸드폰','핸드폰번호','이동전화번호','phone','mobile'],
   region:['지역','거주지','거주지역','주소','구','region','district'],
   programName:['참여사업','신청사업','사업','사업명','programname','program'],
   reason:['제한사유','참여제한사유','사유','reason'],
@@ -39,15 +39,22 @@ function plainRow(line) {
   const rest=(match[3]||'').trim(),first=rest.split(/\s+/)[0];
   return isRegion(first)?[match[1],match[2],first,rest.slice(first.length).trim()]:[match[1],match[2],rest];
 }
+function headerIndices(row) {
+  const headers=row.map(value=>clean(value).normalize('NFKC').replace(/\([^)]*\)/g,'').replace(/[\s*_\u200b:：]/g,'').toLowerCase());
+  return Object.fromEntries(Object.entries(aliases).map(([key,values])=>[key,headers.findIndex(h=>values.includes(h))]));
+}
 function parseRowsDetailed(rows) {
   const nonempty=rows.map((row,index)=>({row,index})).filter(({row})=>row.some(value=>clean(value)));
   if(!nonempty.length) throw new Error('명단을 입력해 주세요.');
-  const headers=nonempty[0].row.map(value=>clean(value).replace(/\s/g,'').toLowerCase());
-  const indices=Object.fromEntries(Object.entries(aliases).map(([key,values])=>[key,headers.findIndex(h=>values.includes(h))]));
-  const hasHeader=indices.name>=0||indices.phone>=0;
-  if(hasHeader&&(indices.name<0||indices.phone<0)) throw new Error('첫 행에 이름과 전화번호 열이 모두 필요합니다.');
+  let headerPosition=-1,indices=headerIndices(nonempty[0].row);
+  for(let i=0;i<Math.min(nonempty.length,50);i++) {
+    const candidate=headerIndices(nonempty[i].row);
+    if(candidate.name>=0&&candidate.phone>=0){headerPosition=i;indices=candidate;break;}
+  }
+  const hasHeader=headerPosition>=0;
+  if(!hasHeader&&(indices.name>=0||indices.phone>=0)) throw new Error('이름과 전화번호 머리글이 모두 필요합니다. 신청자명·핸드폰번호도 사용할 수 있습니다.');
   if(!hasHeader){indices.name=0;indices.phone=1;}
-  const data=hasHeader?nonempty.slice(1):nonempty;
+  const data=hasHeader?nonempty.slice(headerPosition+1):nonempty;
   if(!data.length) throw new Error('머리글 아래에 대상자를 입력해 주세요.');
   if(data.length>2000) throw new Error('한 번에 최대 2000명까지 처리할 수 있습니다.');
   const result={rows:[],errors:[]};
@@ -96,7 +103,7 @@ export async function readRosterFileDetailed(file) {
   if(!/\.xlsx$/i.test(file.name))throw new Error('XLSX, CSV, TSV, TXT 파일을 사용해 주세요.');
   const book=new ExcelJS.Workbook();await book.xlsx.load(await file.arrayBuffer());
   const sheet=book.worksheets[0];if(!sheet)throw new Error('빈 엑셀 파일입니다.');
-  if(sheet.rowCount>2001)throw new Error('한 번에 최대 2000명까지 처리할 수 있습니다.');
+  if(sheet.rowCount>2050)throw new Error('한 번에 최대 2000명까지 처리할 수 있습니다.');
   const rows=[];
   sheet.eachRow({includeEmpty:true},row=>{
     const values=[];

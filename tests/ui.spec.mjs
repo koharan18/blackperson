@@ -168,3 +168,16 @@ test('browser reads generated multi-sheet XLSX with Korean headers and text phon
   await expect(page.getByRole('cell',{name:'엑셀검증가상',exact:true})).toBeVisible();
   await expect(page.getByRole('cell',{name:'행별 사유',exact:true})).toBeVisible();
 });
+
+test('reservation export title and second-row applicant headers work in browser',async({page})=>{
+  const wb=new ExcelJS.Workbook(),sheet=wb.addWorksheet('예약현황');
+  sheet.addRow(['예약현황조회']);sheet.addRow(['순번','신청자명','핸드폰번호','신청하신 사유/궁금하신 내용']);
+  sheet.addRow([1,'예약가상가','01012345678','일반 문의']);sheet.addRow([2,'예약가상나','1099998888','일반 신청 사유']);
+  const bytes=await wb.xlsx.writeBuffer();
+  await page.goto('/login');await page.getByLabel('아이디').fill('ui@example.invalid');await page.getByLabel('비밀번호',{exact:true}).fill('Ui-test-password-123!');await page.getByRole('button',{name:'관리 콘솔 접속'}).click();
+  await page.getByRole('navigation',{name:'주 메뉴'}).getByRole('link',{name:'명단 확인',exact:true}).click();
+  await page.locator('#roster-file').setInputFiles({name:'예약현황조회.xlsx',mimeType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',buffer:Buffer.from(bytes)});
+  await expect(page.getByText('정상 2건 · 오류 0건',{exact:true})).toBeVisible();
+  await expect(page.getByRole('cell',{name:'예약가상가',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'기존 이력과 비교'}).click();await expect(page.getByRole('heading',{name:'검사 결과',exact:true})).toBeVisible();
+});
