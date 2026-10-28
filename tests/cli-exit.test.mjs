@@ -10,3 +10,8 @@ test('failed backup and account commands return failure even with embedded runti
  assert.equal(accounts.status,1,accounts.stderr);
  assert.ok(!accounts.stdout.includes('완료'));
 });
+
+test('server startup failure returns nonzero for scheduler restart',()=>{
+ const child=spawnSync(process.execPath,['server/index.mjs'],{env:{...process.env,BLACK_ENV_FILE:new URL('../server/',import.meta.url).pathname},encoding:'utf8'});
+ assert.equal(child.status,1,child.stderr);
+});

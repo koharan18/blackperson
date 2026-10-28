@@ -66,3 +66,40 @@ function Get-BlackServerIPv4 {
     }
     throw '활성 사내망의 IPv4 주소를 찾지 못했습니다. 사내망 연결을 확인해 주세요.'
 }
+
+# Administrative setup only manages OS settings. All database work uses a
+# separate, explicitly limited token; secrets travel over a local pipe only.
+function Invoke-BlackLimitedJob([string]$AppPath, [hashtable]$Request) {
+    $identifier = [Guid]::NewGuid().ToString('N')
+    $pipeName = 'BLACK-Setup-' + $identifier
+    $taskName = 'BLACK Setup Worker ' + $identifier
+    $pipe = New-Object IO.Pipes.NamedPipeServerStream($pipeName, [IO.Pipes.PipeDirection]::InOut, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous)
+    try {
+        $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType S4U -RunLevel Limited
+        $worker = Join-Path $AppPath 'windows\office-worker.ps1'
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $worker + '" -AppPath "' + $AppPath + '" -PipeName "' + $pipeName + '"') -WorkingDirectory $AppPath
+        $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        Register-ScheduledTask -TaskName $taskName -Action $action -Principal $principal -Settings $settings -Force | Out-Null
+        $pending = $pipe.BeginWaitForConnection($null,$null)
+        Start-ScheduledTask -TaskName $taskName
+        if (-not $pending.AsyncWaitHandle.WaitOne(45000)) { throw '일반 사용자 작업을 시작하지 못했습니다. 작업 스케줄러의 BLACK Setup Worker 결과 또는 회사 배치 로그온 정책을 확인해야 합니다.' }
+        $pipe.EndWaitForConnection($pending)
+        $reader = New-Object IO.StreamReader($pipe)
+        $writer = New-Object IO.StreamWriter($pipe)
+        $writer.AutoFlush = $true
+        $writer.WriteLine(($Request | ConvertTo-Json -Compress))
+        $response = $reader.ReadLineAsync()
+        if (-not $response.Wait(840000)) { throw '일반 사용자 DB 작업의 응답 시간이 초과되었습니다. DB 파일을 삭제하지 말고 작업 상태를 확인하세요.' }
+        if (-not $response.Result) { throw '일반 사용자 DB 작업이 결과 없이 종료되었습니다.' }
+        $result = $response.Result | ConvertFrom-Json
+        if ($result.exitCode -ne 0) { throw ('일반 사용자 DB 작업 실패: ' + $result.error) }
+        return $result.output
+    } finally {
+        $pipe.Dispose()
+        # Never forcibly stop an active database worker on a timeout.
+        $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+        for ($i=0; $task -and $task.State -eq 'Running' -and $i -lt 10; $i++) { Start-Sleep -Milliseconds 200; $task = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue }
+        if ($task -and $task.State -ne 'Running') { Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue }
+    }
+}

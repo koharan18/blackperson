@@ -19,6 +19,6 @@ try {
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(port,host,()=>{server.removeListener('error',reject);resolve();});});
   if(config.BLACK_OFFICE_MODE==='true')control=await startOfficeControl(join(root,'private'),async()=>{await stop();process.exit(0);});
   console.log(`BLACK 서버 실행: ${host}:${port} (대상자 ${rows.length}건 복호화 확인)`);
-  server.on('error',async()=>{console.error('서버 포트를 사용할 수 없습니다. 다른 BLACK 실행 창을 확인해 주세요.');await stop();process.exitCode=1;});
+  server.on('error',async()=>{console.error('서버 포트를 사용할 수 없습니다. 다른 BLACK 실행 창을 확인해 주세요.');await stop();process.exit(1);});
   for(const signal of ['SIGINT','SIGTERM']) process.once(signal,async()=>{await stop();process.exit(0);});
-} catch(e) {console.error(e.code==='42P01'?'아직 복원되지 않았습니다. 먼저 npm run restore를 실행해 주세요.':e.message);await stop();process.exitCode=1;}
+} catch(e) {console.error(e.code==='42P01'?'아직 복원되지 않았습니다. 먼저 npm run restore를 실행해 주세요.':e.message);await stop();process.exit(1);}

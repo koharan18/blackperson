@@ -53,7 +53,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\office-stop.ps
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\office-start.ps1
 
 # 즉시 추가 백업
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\office-backup.ps1
+Start-ScheduledTask -TaskName 'BLACK Office Backup'
 ```
 
 정상 종료는 비공개 로컬 제어 파이프의 인증된 요청을 사용합니다. 네트워크에 종료 API를 노출하지 않습니다. 일시 중지를 먼저 하지 않으면 작업 스케줄러가 종료된 서버를 다시 시작할 수 있습니다. 일반 `npm start` 창으로 실행한 서버는 기존처럼 Ctrl+C를 사용합니다.
@@ -63,3 +63,5 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\windows\office-backup.
 ## 원본 키 파일 접근 오류
 
 `EPERM ... private\BLACK.env.backup`은 원본 키 파일을 열지 못한 상태입니다. 키를 새로 만들거나 삭제하지 마세요. 수정 설치기는 파일 직접 권한과 폴더 상속 권한을 나누어 적용하고 읽기를 검사합니다. 여전히 실패하면 Windows ACL 또는 보안 프로그램 차단을 실제 PC에서 확인해야 합니다. 실패한 CLI의 종료 코드가 embedded runtime의 beforeExit 훅에서 0으로 바뀌던 문제도 수정했으며, 백업 파일 실재 확인 전에는 직원 계정 변경을 진행하지 않습니다.
+
+관리자 설치기는 DB를 직접 시작하지 않습니다. 백업·직원 계정 설정은 현재 계정의 S4U Limited 임시 작업으로 실행하며, 비밀번호는 로컬 파이프/표준 입력으로만 전달합니다. 실행기 역시 관리자 토큰이면 DB 시작 전에 거부합니다. S4U 실행이 회사 정책으로 차단되면 권한을 올려 우회하지 않고 오류로 중단합니다.
