@@ -1,20 +1,19 @@
-import { mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { join,resolve } from 'node:path';
 import { startDatabase, readConfig, root } from '../server/runtime.mjs';
-import { exportData } from '../server/recovery.mjs';
+import { writeLogicalBackup } from '../server/backup.mjs';
 
 let db;
 try {
   const config = readConfig();
+  const keyFile=process.env.BLACK_ENV_FILE||join(root,'private','BLACK.env.backup');
+  if(!existsSync(keyFile)||!config.PHONE_ENCRYPTION_KEY)throw new Error('원본 환경 키 파일이 필요합니다.');
+  const outputIndex=process.argv.indexOf('--output');
+  if(outputIndex>=0&&!process.argv[outputIndex+1])throw new Error('백업 저장 폴더를 지정해 주세요.');
+  const outputRoot=outputIndex>=0?resolve(process.argv[outputIndex+1]):join(root,'backups');
   db = await startDatabase();
-  const data = await exportData(db.pool, config.PHONE_ENCRYPTION_KEY);
-  const folder = join(root, 'backups', new Date().toISOString().replace(/[:.]/g, '-'));
-  mkdirSync(folder, { recursive: true, mode: 0o700 });
-  writeFileSync(join(folder, 'black.black'), data, { mode: 0o600 });
-  writeFileSync(join(folder, 'manifest.json'), JSON.stringify({ sha256: createHash('sha256').update(data).digest('hex'), format: 'BLACK-ENCRYPTED-1' }, null, 2), { mode: 0o600 });
-  copyFileSync(join(root, 'private', 'BLACK.env.backup'), join(folder, 'BLACK.env.backup'));
-  console.log('백업 완료:', folder);
-  console.log('앱 소스 ZIP과 이 폴더를 함께 외장 드라이브에 보관하세요. 환경 파일은 비밀 키를 포함합니다.');
+  const folder=await writeLogicalBackup({pool:db.pool,config,keyFile,outputRoot,settingsFile:join(root,'.env')});
+  if(process.argv.includes('--json'))console.log(JSON.stringify({folder}));
+  else{console.log('백업 완료:',folder);console.log('이 폴더와 앱 코드를 외장 드라이브에도 보관하세요. 키 파일은 비밀 정보를 포함합니다.');}
 } catch(e) { console.error(e.message); process.exitCode = 1; }
 finally { if (db) await db.stop(); }
