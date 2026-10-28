@@ -1,0 +1,7 @@
+{
+  "exit": 1,
+  "progress": [
+    "elevated"
+  ],
+  "failure": "Error: Command failed: C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\black-native-alias-XgnZEb\\3ac2daa8e9f81a5c7d435f2b\\bin\\pg_ctl.exe start -D C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\black-native-alias-XgnZEb\\4c85840c16d798bd7ae4df29 -p C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\black-native-alias-XgnZEb\\3ac2daa8e9f81a5c7d435f2b\\bin\\initdb.exe -o -D \"C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\black-native-alias-XgnZEb\\fabb9e25525b80cfc76fc63d\" -U black_local --auth=scram-sha-256 --pwfile=\"C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\black-native-alias-XgnZEb\\0268bd4515f26b2291f319b2\\init-password.txt\" --encoding=UTF8 --locale=C -l C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\black-native-alias-XgnZEb\\0268bd4515f26b2291f319b2\\init.log -W\npg_ctl: directory \"C:/Users/RUNNER~1/AppData/Local/Temp/black-native-alias-XgnZEb/4c85840c16d798bd7ae4df29\" does not exist\r\n\n    at genericNodeError (node:internal/errors:986:15)\n    at wrappedFn (node:internal/errors:540:14)\n    at ChildProcess.exithandler (node:child_process:417:12)\n    at ChildProcess.emit (node:events:514:28)\n    at maybeClose (node:internal/child_process:1172:16)\n    at ChildProcess._handle.onexit (node:internal/child_process:335:5)"
+}
