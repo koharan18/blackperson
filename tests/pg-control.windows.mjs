@@ -18,7 +18,7 @@ try{
  folder=mkdtempSync(join(tmpdir(),'black-pg-코덱스-'));
  const sid=execFileSync('powershell.exe',['-NoProfile','-Command','[Security.Principal.WindowsIdentity]::GetCurrent().User.Value'],{encoding:'utf8'}).trim();
  execFileSync('icacls.exe',[folder,'/grant:r',`*${sid}:(OI)(CI)F`]);
- aliases=mkdtempSync(join(tmpdir(),'black-native-alias-'));process.env.BLACK_NATIVE_ALIAS_ROOT=aliases;
+
  const directory=join(folder,'data');mkdirSync(directory);
  const cluster=join(directory,'postgres'),password=randomBytes(32).toString('hex');
  writeFileSync(join(directory,'runtime.json'),JSON.stringify({password}));
