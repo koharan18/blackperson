@@ -2,6 +2,8 @@
 
 **final result: passed**
 
+Rich-import follow-up: individual program/reason/memo fields now appear in bulk preview, common-field hints accurately explain fallback precedence, and invalid-row warnings are visible. Existing monochrome tokens and layout are retained. Full unit/API suite 19/19 and browser suite 5/5 passed, with no console errors in the design capture test. Current screenshots were regenerated using synthetic fixtures; no provided personal roster data was used for browser capture.
+
 Scope is the user's request to restore the supplied original visual tone across the existing functional app. This is a production UI update, not a new hosted prototype. No Sites deployment or new data migration was requested.
 
 ## Visual truth and captures

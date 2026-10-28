@@ -127,3 +127,24 @@ test('original monochrome design, admin access and responsive screens',async({pa
   await page.screenshot({path:'docs/images/original-tone/mobile.png',fullPage:true});
   expect(errors).toEqual([]);
 });
+
+test('rich bulk file keeps per-row reason, program and region while excluding missing phones',async({page})=>{
+  await page.goto('/login');
+  await page.getByLabel('아이디').fill('ui@example.invalid');
+  await page.getByLabel('비밀번호',{exact:true}).fill('Ui-test-password-123!');
+  await page.getByRole('button',{name:'관리 콘솔 접속'}).click();
+  await page.getByRole('link',{name:'일괄 등록',exact:true}).click();
+  await page.locator('#roster-file').setInputFiles({name:'rich.csv',mimeType:'text/csv',buffer:Buffer.from('이름,전화번호,참여 사업,제한 사유,지역,내부 메모\n가상개별가,1076543210,사업가,개별사유가,강북구,기존메모가\n가상개별나,01066667777,사업나,개별사유나,노원구,기존메모나\n번호누락가상,,사업가,확인필요,,')});
+  await expect(page.getByText('정상 2건 · 오류 1건',{exact:true})).toBeVisible();
+  await expect(page.getByRole('cell',{name:'개별사유가',exact:true})).toBeVisible();
+  await expect(page.getByRole('textbox',{name:'공통 참여 사업',exact:true})).not.toHaveAttribute('required');
+  await page.getByRole('button',{name:'2명 일괄 등록',exact:true}).click();
+  await expect(page.getByRole('heading',{name:'대상자 목록',exact:true})).toBeVisible();
+  await expect(page.getByRole('cell',{name:'번호누락가상',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'가상개별가 수정'}).click();
+  await expect(page.getByRole('textbox',{name:'전화번호',exact:true})).toHaveValue('01076543210');
+  await expect(page.getByRole('textbox',{name:'참여 사업',exact:true})).toHaveValue('사업가');
+  await expect(page.getByRole('textbox',{name:'제한 사유',exact:true})).toHaveValue('개별사유가');
+  await expect(page.getByRole('textbox',{name:'내부 메모',exact:true})).toHaveValue(/강북구/);
+  await expect(page.getByRole('textbox',{name:'내부 메모',exact:true})).toHaveValue(/기존메모가/);
+});

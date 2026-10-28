@@ -6,32 +6,33 @@ export default function Roster({mode, go}) {
   const bulk = mode === 'bulk';
   const [tab, setTab] = useState('file'), [text, setText] = useState(''), [fileName, setFileName] = useState('');
   const [preview, setPreview] = useState([]), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  const [rowErrors, setRowErrors] = useState([]);
   const [results, setResults] = useState(null), [filter, setFilter] = useState('전체');
   const [common, setCommon] = useState({programName: '', reason: '', registeredAt: dateInput(), memo: ''});
   const generation = useRef(0);
   useEffect(() => () => {generation.current++;}, []);
 
-  function invalidateInput() {generation.current++; setPreview([]); setResults(null); setBusy(false); setError(''); setFileName('');}
+  function invalidateInput() {generation.current++; setPreview([]); setRowErrors([]); setResults(null); setBusy(false); setError(''); setFileName('');}
   function switchTab(next) {invalidateInput(); setTab(next);}
   async function loadFile(file) {
     if (!file) return;
     const request = ++generation.current;
-    setBusy(true); setError(''); setPreview([]); setResults(null); setFileName('');
+    setBusy(true); setError(''); setPreview([]); setRowErrors([]); setResults(null); setFileName('');
     try {
-      const {readRosterFile} = await import('./roster.mjs');
-      const rows = await readRosterFile(file);
+      const {readRosterFileDetailed} = await import('./roster.mjs');
+      const {rows, errors} = await readRosterFileDetailed(file);
       if (request !== generation.current) return;
-      setPreview(rows); setFileName(file.name);
+      setPreview(rows); setRowErrors(errors); setFileName(file.name);
     } catch (e) {if (request === generation.current) setError(e.message);}
     finally {if (request === generation.current) setBusy(false);}
   }
   async function parse() {
     const request = ++generation.current;
-    setError(''); setBusy(true); setPreview([]); setResults(null);
+    setError(''); setBusy(true); setPreview([]); setRowErrors([]); setResults(null);
     try {
-      const {parseRosterText} = await import('./roster.mjs');
-      const rows = parseRosterText(text);
-      if (request === generation.current) setPreview(rows);
+      const {parseRosterTextDetailed} = await import('./roster.mjs');
+      const {rows, errors} = parseRosterTextDetailed(text);
+      if (request === generation.current) {setPreview(rows); setRowErrors(errors);}
     } catch (e) {if (request === generation.current) setError(e.message);}
     finally {if (request === generation.current) setBusy(false);}
   }
@@ -41,7 +42,9 @@ export default function Roster({mode, go}) {
     setBusy(true); setError('');
     try {
       if (bulk) {
-        const data = await api('/bulk', {method: 'POST', body: {rows: preview.map(row => ({...row, ...common}))}});
+        const {mergeBulkRow}=await import('./roster.mjs');
+        const rows=preview.map((row,index)=>{try{return mergeBulkRow(row,common);}catch(error){throw new Error(`${index+1}행: ${error.message}`);}});
+        const data = await api('/bulk', {method: 'POST', body: {rows}});
         go('/people', `${data.count}명의 대상자를 등록했습니다.`);
       } else {
         const data = await api('/compare', {method: 'POST', body: {rows: preview}});
@@ -66,6 +69,8 @@ export default function Roster({mode, go}) {
     <button type="button" className="button" onClick={parse} disabled={busy || !text.trim()}>명단 미리보기</button>
   </>;
   const visible = results && (filter === '전체' ? results : results.filter(row => row.status === filter));
+  const needsProgram = !preview.length || preview.some(row => !row.programName);
+  const needsReason = !preview.length || preview.some(row => !row.reason);
 
   return <>
     <Heading title={bulk ? '일괄 등록' : '명단 확인'} description={bulk ? '파일을 올리거나 이름과 전화번호를 붙여넣어 여러 명을 한 번에 등록합니다.' : '신청자 명단은 저장하지 않습니다. 기존 제한 이력과 비교한 결과만 보여줍니다.'}/>
@@ -79,18 +84,19 @@ export default function Roster({mode, go}) {
           {bulk ? <><label className="compact-file" htmlFor="roster-file"><strong>{fileName || 'CSV 또는 XLSX 파일 선택'}</strong><span>최대 2,000명</span></label>{textInput}</> : tab === 'file' ? <label className="dropzone" htmlFor="roster-file" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault(); loadFile(e.dataTransfer.files[0]);}}><strong>신청자 명단 파일 선택</strong><p>{fileName || 'CSV 또는 XLSX 파일을 올리면 이름과 전화번호 열을 읽습니다. 올린 파일은 저장하지 않습니다.'}</p><span className="button primary file-button">파일 선택</span><small>XLSX · CSV · TSV · TXT / 최대 10MB, 2,000명</small></label> : <div className="text-input-area">{textInput}</div>}
           {busy && !results && <p className="processing-status" role="status">명단을 처리하고 있습니다…</p>}
         </section>
-        {bulk && <section className="common-fields"><h2>공통 등록 정보</h2><p className="section-description">아래 항목은 등록하는 사람 모두에게 적용됩니다.</p><div className="workflow-step"><span>2. 공통 정보</span></div>
-          <Field label="공통 참여 사업" required><input required maxLength={200} value={common.programName} onChange={e => setCommon({...common, programName: e.target.value})} placeholder="참여 사업을 입력하세요"/></Field>
-          <Field label="공통 제한 사유" required><textarea required rows={2} maxLength={2000} value={common.reason} onChange={e => setCommon({...common, reason: e.target.value})} placeholder="예: 중복 신청, 참여 기준 미충족"/></Field>
+        {bulk && <section className="common-fields"><h2>공통 등록 정보</h2><p className="section-description">파일의 개별 사업·사유를 우선 사용하며, 빈 항목에만 아래 값을 적용합니다.</p><div className="workflow-step"><span>2. 공통 정보</span></div>
+          <Field label="공통 참여 사업" required={needsProgram} hint={needsProgram?'파일에 사업이 없는 행에 적용합니다.':'모든 행에 개별 사업이 있습니다. 공통값은 비워도 됩니다.'}><input required={needsProgram} maxLength={200} value={common.programName} onChange={e => setCommon({...common, programName: e.target.value})} placeholder="참여 사업을 입력하세요"/></Field>
+          <Field label="공통 제한 사유" required={needsReason} hint={needsReason?'파일에 사유가 없는 행에 적용합니다.':'모든 행에 개별 사유가 있습니다. 공통값은 비워도 됩니다.'}><textarea required={needsReason} rows={2} maxLength={2000} value={common.reason} onChange={e => setCommon({...common, reason: e.target.value})} placeholder="예: 중복 신청, 참여 기준 미충족"/></Field>
           <Field label="공통 등록일" required><input required type="date" value={common.registeredAt} onChange={e => setCommon({...common, registeredAt: e.target.value})}/></Field>
           <Field label="공통 메모"><input maxLength={4000} value={common.memo} onChange={e => setCommon({...common, memo: e.target.value})} placeholder="선택 입력"/></Field>
         </section>}
       </div>
       <Alert>{error}</Alert>
+      {rowErrors.length>0&&<div className="row-error-notice" role="alert"><strong>확인 필요 {rowErrors.length}행 — 오류가 있는 행은 처리 대상에서 제외됩니다.</strong><ul>{rowErrors.slice(0,10).map(issue=><li key={issue.row}>{issue.message}</li>)}</ul>{rowErrors.length>10&&<p>외 {rowErrors.length-10}행. 원본의 번호를 보완한 뒤 다시 올려 주세요.</p>}</div>}
       {preview.length > 0 ? <>
         <div className="workflow-step preview-step"><span>{bulk ? '3. 등록 내용 확인' : '2. 입력 내용 확인'}</span><p>미리보기의 이름과 전화번호를 확인한 후 진행하세요.</p></div>
-        <section className="panel preview-panel"><div className="panel-heading"><div><h2>명단 미리보기</h2><p>정상 {preview.length}건 · 오류 0건</p></div><button className="button primary" disabled={busy}>{busy ? '처리 중…' : bulk ? `${preview.length}명 일괄 등록` : '기존 이력과 비교'}</button></div>
-          <div className="table-scroll preview-table"><table><thead><tr><th>상태</th><th>이름</th><th>전화번호</th><th>신청사업</th></tr></thead><tbody>{preview.slice(0, 100).map((row, i) => <tr key={i}><td><Badge>정상</Badge></td><td><strong>{row.name}</strong></td><td className="phone-cell">{row.phone}</td><td className="muted">{bulk ? common.programName || '-' : '-'}</td></tr>)}</tbody></table></div>
+        <section className={'panel preview-panel '+(bulk?'bulk-preview':'')}><div className="panel-heading"><div><h2>명단 미리보기</h2><p>정상 {preview.length}건 · 오류 {rowErrors.length}건</p></div><button className="button primary" disabled={busy}>{busy ? '처리 중…' : bulk ? `${preview.length}명 일괄 등록` : '기존 이력과 비교'}</button></div>
+          <div className="table-scroll preview-table"><table><thead><tr><th>상태</th><th>이름</th><th>전화번호</th><th>{bulk?'참여 사업':'신청사업'}</th>{bulk&&<><th>제한 사유</th><th>내부 메모</th></>}</tr></thead><tbody>{preview.slice(0, 100).map((row, i) => <tr key={i}><td><Badge>정상</Badge></td><td><strong>{row.name}</strong></td><td className="phone-cell">{row.phone}</td><td className="muted">{row.programName || (bulk ? common.programName || '-' : '-')}</td>{bulk&&<><td>{row.reason||common.reason||'-'}</td><td className="muted memo-preview">{[row.memo,common.memo].filter(Boolean).join('\n')||'-'}</td></>}</tr>)}</tbody></table></div>
           {preview.length > 100 && <p className="preview-note">미리보기는 처음 100명입니다. 전체 {preview.length}명을 처리합니다.</p>}
         </section>
       </> : <section className="roster-empty"><Empty title={bulk ? '등록할 명단이 없습니다.' : '확인할 명단이 없습니다.'} description="파일을 올리거나 이름과 전화번호를 붙여넣어 주세요."/></section>}
