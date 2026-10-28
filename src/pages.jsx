@@ -9,7 +9,22 @@ function PeopleTable({rows,onEdit,onDelete}) {return <div className="table-scrol
 export function Dashboard({go}) {
   const {data,error,loading}=useData('/dashboard');
   if(loading)return <Loading/>;
-  return <><Heading title="대시보드" description="제한 대상자 현황과 최근 등록 내역을 한눈에 확인하세요."><Link to="/compare" go={go}><Search size={17}/>명단 확인</Link><Link to="/new" go={go} primary><Plus size={17}/>신규 등록</Link></Heading><Alert>{error}</Alert>{data&&<><div className="stats-grid">{[[Users,'전체 대상자',data.total,'현재 관리 중인 대상자'],[CalendarDays,'이번 달 등록',data.month,'이번 달 새로 등록된 대상자'],[Layers3,'관리 사업',data.programs,'대상자가 등록된 참여 사업']].map(([Icon,label,count,sub])=><section className="stat-card" key={label}><div className="stat-top"><span>{label}</span><span className="stat-icon"><Icon size={20}/></span></div><div className="stat-value">{count.toLocaleString()}<small>{label==='관리 사업'?'개':'명'}</small></div><p>{sub}</p></section>)}</div><div className="dashboard-columns"><section className="panel recent-panel"><div className="panel-heading"><div><h2>최근 등록 내역</h2><p>가장 최근에 등록된 대상자입니다.</p></div><button className="text-button" onClick={()=>go('/people')}>전체 보기<ArrowRight size={16}/></button></div>{data.recent.length?<PeopleTable rows={data.recent}/>:<Empty/>}<div className="panel-bottom">전화번호는 개인정보 보호를 위해 일부만 표시됩니다.</div></section><aside className="quick-panel"><div className="quick-icon"><ShieldCheck size={26}/></div><span className="eyebrow">QUICK CHECK</span><h2>신청자 명단,<br/>한 번에 확인하세요.</h2><p>엑셀 파일이나 텍스트로 명단을 넣고 기존 제한 이력과 비교할 수 있습니다.</p><button className="button primary" onClick={()=>go('/compare')}>명단 확인 시작<ArrowUpRight size={18}/></button><div className="quick-divider"/><strong>확인과 등록은 다릅니다.</strong><p className="small">명단 확인은 조회 전용입니다.<br/>새 대상자 저장은 신규·일괄 등록을 이용하세요.</p></aside></div></>}</>;
+  return <>
+    <Heading title="제한 이력" description="등록된 제한 대상자를 관리합니다.">
+      <Link to="/new" go={go}><Plus size={15}/>신규 등록</Link>
+      <Link to="/compare" go={go} primary>명단 확인</Link>
+    </Heading>
+    <Alert>{error}</Alert>
+    {data && <>
+      <div className="stats-grid">
+        {[["전체 대상자",data.total],["이번 달 등록",data.month],["관리 사업",data.programs]].map(([label,count])=><section className="stat-card" key={label}><div className="stat-top">{label}</div><div className="stat-value">{count.toLocaleString()}</div></section>)}
+      </div>
+      <section className="panel recent-panel">
+        <div className="panel-heading"><div><h2>최근 등록</h2><p>가장 최근에 등록된 제한 이력입니다.</p></div><button className="text-button" onClick={()=>go('/people')}>전체 보기</button></div>
+        {data.recent.length ? <div className="table-scroll"><table className="recent-table"><thead><tr><th>이름</th><th>참여 사업</th><th>전화번호</th><th>등록일</th><th>등록자</th></tr></thead><tbody>{data.recent.map(p=><tr key={p.id}><td><strong>{p.name}</strong></td><td>{p.programName}</td><td className="phone-cell">{p.phoneMasked}</td><td className="muted nowrap">{dateText(p.registeredAt)}</td><td className="muted">{p.registeredBy}</td></tr>)}</tbody></table></div> : <Empty/>}
+      </section>
+    </>}
+  </>;
 }
 
 export function People({user,go}) {

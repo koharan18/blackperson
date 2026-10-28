@@ -12,3 +12,4 @@ playwright-report/
 *.log
 *.dump
 *.backup
+.ui-backups/

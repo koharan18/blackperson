@@ -9,7 +9,7 @@ export function useData(path,refresh=0) {
   useEffect(()=>{let active=true;set(s=>({...s,loading:true,error:''}));api(path).then(data=>{if(active)set({data,error:'',loading:false});}).catch(e=>{if(active)set({data:null,error:e.message,loading:false});});return()=>{active=false;};},[path,refresh]);
   return state;
 }
-export function Heading({eyebrow='BLACK CONSOLE',title,description,children}) {return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1>{description&&<p>{description}</p>}</div><div className="heading-actions">{children}</div></div>;}
+export function Heading({eyebrow='BLACK',title,description,children}) {return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1>{description&&<p>{description}</p>}</div><div className="heading-actions">{children}</div></div>;}
 export function Alert({children,success=false}) {if(!children)return null;return <div className={'alert '+(success?'success':'')} role={success?'status':'alert'}>{success?<CheckCircle2 size={18}/>:<AlertCircle size={18}/>}<span>{children}</span></div>;}
 export function Loading() {return <div className="loading" role="status"><LoaderCircle className="spin" size={22}/>불러오는 중입니다</div>;}
 export function Empty({title='등록된 내역이 없습니다',description='새로운 대상자를 등록하면 이곳에서 확인할 수 있습니다.'}) {return <div className="empty"><div className="empty-icon"><Inbox size={28}/></div><h3>{title}</h3><p>{description}</p></div>;}
