@@ -1,0 +1,15 @@
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {randomBytes} from 'node:crypto';
+import bcrypt from 'bcryptjs';
+import {startDatabase} from '../server/runtime.mjs';
+import {restoreData} from '../server/recovery.mjs';
+import {createApp} from '../server/app.mjs';
+const directory=await mkdtemp(join(tmpdir(),'black-browser-'));
+const db=await startDatabase({directory,port:15438});
+const now=new Date().toISOString();
+await restoreData(db.pool,{User:[{id:'test-admin',name:'검증 관리자',email:'ui@example.invalid',passwordHash:await bcrypt.hash('Ui-test-password-123!',10),role:'ADMIN',createdAt:now,updatedAt:now}],RestrictedPerson:[],AuditLog:[],_prisma_migrations:[]});
+const app=await createApp({pool:db.pool,config:{SESSION_SECRET:randomBytes(32).toString('hex'),PHONE_ENCRYPTION_KEY:randomBytes(32).toString('hex')}});
+const server=app.listen(8235,'127.0.0.1');
+for(const signal of ['SIGINT','SIGTERM']) process.once(signal,async()=>{await new Promise(r=>server.close(r));await db.stop();await rm(directory,{recursive:true,force:true});process.exit(0);});

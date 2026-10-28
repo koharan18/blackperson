@@ -1,0 +1,8 @@
+Completed: True
+Exit: 0
+STDOUT:
+Elevated orchestrator confirmed.
+Restricted fixture initialization passed.
+PASS: elevated Windows Node -> restricted PostgreSQL, authenticated query, reuse, fast stop, persisted restart.
+
+STDERR:
