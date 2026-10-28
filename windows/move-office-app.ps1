@@ -161,6 +161,7 @@ try {
     if($LASTEXITCODE -ne 0){throw '새 위치 서버는 실행 중이지만 이전 후 백업이 실패했습니다.'}
     @{source=$Source;destination=$Destination;verifiedAt=(Get-Date).ToString('o');dataSha256=$after.sha256;backupFolder=$backup.folder} | ConvertTo-Json | Set-Content (Join-Path $Destination 'private\app-move.json') -Encoding UTF8
     @('BLACK 앱은 다음 위치로 이전됐습니다:',$Destination,'이 폴더의 이전 DB를 실행하지 마세요. 새 위치 실행 및 재부팅 확인 후 정리할 수 있는 이전 사본입니다.') | Set-Content (Join-Path $Source 'APP-MOVED.txt') -Encoding UTF8
+    Write-Host ('명단 '+$after.tables.RestrictedPerson.count+'건·계정 '+$after.tables.User.count+'개가 원본과 일치합니다.')
     Write-Host ('앱 이전·명단 일치·HTTPS 실행·자동 실행 경로 갱신 완료: '+$Destination) -ForegroundColor Green
     Write-Host '접속 주소와 직원 계정은 그대로입니다. 직원 PC에서는 작업할 필요가 없습니다.'
     Write-Host '다운로드의 원본은 아직 보존했습니다. 새 위치로 재부팅 실행까지 확인한 뒤 BLACK-recovery 폴더를 정리하세요.'
